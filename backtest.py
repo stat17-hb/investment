@@ -1,0 +1,186 @@
+"""
+백테스트 엔진
+"""
+import pandas as pd
+import numpy as np
+
+
+class Backtester:
+    """
+    표준편차 매매법 백테스트
+
+    전략:
+    - 1σ 또는 2σ 하락 시 매수
+    - 매도 조건: 일정 수익률 달성 또는 이동평균선 회귀
+    """
+
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        initial_capital: float = 10000,
+        position_size: float = 1000,
+        sigma_level: int = 1,
+        take_profit_pct: float = 10.0,
+        use_ma_exit: bool = True
+    ):
+        """
+        Args:
+            data: 전략이 적용된 데이터 (StandardDeviationStrategy.data)
+            initial_capital: 초기 자본금
+            position_size: 1회 매수 금액
+            sigma_level: 매수 기준 (1 또는 2)
+            take_profit_pct: 목표 수익률 (%)
+            use_ma_exit: 이동평균선 회귀 시 매도 여부
+        """
+        self.data = data.copy()
+        self.initial_capital = initial_capital
+        self.position_size = position_size
+        self.sigma_level = sigma_level
+        self.take_profit_pct = take_profit_pct / 100
+        self.use_ma_exit = use_ma_exit
+
+        self.positions = []
+        self.trades = []
+        self.portfolio_value = []
+
+    def run(self) -> dict:
+        """백테스트 실행"""
+        cash = self.initial_capital
+        holdings = []  # (매수가격, 수량, 매수일자)
+
+        for idx, row in self.data.iterrows():
+            current_price = row['Close']
+            signal = row['Signal']
+            ma_20 = row['MA_20']
+
+            # 매수 조건 체크
+            buy_signal = False
+            if self.sigma_level == 1 and signal >= 1:
+                buy_signal = True
+            elif self.sigma_level == 2 and signal == 2:
+                buy_signal = True
+
+            # 매수 실행
+            if buy_signal and cash >= self.position_size:
+                shares = self.position_size / current_price
+                holdings.append({
+                    'buy_price': current_price,
+                    'shares': shares,
+                    'buy_date': idx,
+                    'buy_signal': signal
+                })
+                cash -= self.position_size
+
+            # 매도 조건 체크 (보유 포지션이 있을 때)
+            new_holdings = []
+            for position in holdings:
+                profit_pct = (current_price - position['buy_price']) / position['buy_price']
+                should_sell = False
+
+                # 목표 수익률 달성
+                if profit_pct >= self.take_profit_pct:
+                    should_sell = True
+                    sell_reason = 'Take Profit'
+
+                # 이동평균선 회귀 (MA20 돌파)
+                elif self.use_ma_exit and current_price > ma_20 and not pd.isna(ma_20):
+                    if position['buy_price'] < ma_20:  # 매수가가 MA 아래였다면
+                        should_sell = True
+                        sell_reason = 'MA Cross'
+
+                if should_sell:
+                    # 매도 실행
+                    sell_amount = position['shares'] * current_price
+                    cash += sell_amount
+
+                    # 거래 기록
+                    self.trades.append({
+                        'buy_date': position['buy_date'],
+                        'sell_date': idx,
+                        'buy_price': position['buy_price'],
+                        'sell_price': current_price,
+                        'shares': position['shares'],
+                        'profit_pct': profit_pct * 100,
+                        'profit_amount': sell_amount - (position['shares'] * position['buy_price']),
+                        'sell_reason': sell_reason,
+                        'holding_days': (idx - position['buy_date']).days
+                    })
+                else:
+                    new_holdings.append(position)
+
+            holdings = new_holdings
+
+            # 포트폴리오 가치 계산
+            holdings_value = sum([h['shares'] * current_price for h in holdings])
+            total_value = cash + holdings_value
+
+            self.portfolio_value.append({
+                'date': idx,
+                'cash': cash,
+                'holdings_value': holdings_value,
+                'total_value': total_value,
+                'num_positions': len(holdings)
+            })
+
+        # 최종 결과 계산
+        return self.calculate_performance()
+
+    def calculate_performance(self) -> dict:
+        """성과 지표 계산"""
+        if not self.portfolio_value:
+            return {}
+
+        portfolio_df = pd.DataFrame(self.portfolio_value)
+        final_value = portfolio_df['total_value'].iloc[-1]
+
+        total_return = (final_value - self.initial_capital) / self.initial_capital * 100
+
+        # 거래 통계
+        trades_df = pd.DataFrame(self.trades) if self.trades else pd.DataFrame()
+
+        if not trades_df.empty:
+            win_trades = trades_df[trades_df['profit_pct'] > 0]
+            win_rate = len(win_trades) / len(trades_df) * 100
+            avg_profit = trades_df['profit_pct'].mean()
+            avg_win = win_trades['profit_pct'].mean() if len(win_trades) > 0 else 0
+            avg_loss = trades_df[trades_df['profit_pct'] < 0]['profit_pct'].mean()
+            avg_loss = avg_loss if not pd.isna(avg_loss) else 0
+            max_profit = trades_df['profit_pct'].max()
+            max_loss = trades_df['profit_pct'].min()
+            avg_holding_days = trades_df['holding_days'].mean()
+        else:
+            win_rate = 0
+            avg_profit = 0
+            avg_win = 0
+            avg_loss = 0
+            max_profit = 0
+            max_loss = 0
+            avg_holding_days = 0
+
+        # Buy & Hold 비교
+        first_price = self.data['Close'].iloc[0]
+        last_price = self.data['Close'].iloc[-1]
+        buy_hold_return = (last_price - first_price) / first_price * 100
+
+        # 최대 낙폭 (MDD)
+        portfolio_df['cummax'] = portfolio_df['total_value'].cummax()
+        portfolio_df['drawdown'] = (portfolio_df['total_value'] - portfolio_df['cummax']) / portfolio_df['cummax'] * 100
+        max_drawdown = portfolio_df['drawdown'].min()
+
+        return {
+            'initial_capital': self.initial_capital,
+            'final_value': final_value,
+            'total_return_pct': total_return,
+            'total_trades': len(trades_df),
+            'win_rate': win_rate,
+            'avg_profit_pct': avg_profit,
+            'avg_win_pct': avg_win,
+            'avg_loss_pct': avg_loss,
+            'max_profit_pct': max_profit,
+            'max_loss_pct': max_loss,
+            'avg_holding_days': avg_holding_days,
+            'buy_hold_return_pct': buy_hold_return,
+            'max_drawdown_pct': max_drawdown,
+            'portfolio_df': portfolio_df,
+            'trades_df': trades_df
+        }
