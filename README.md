@@ -46,6 +46,28 @@ streamlit run app.py
 
 브라우저가 자동으로 열리며 `http://localhost:8501`에서 대시보드를 확인할 수 있습니다.
 
+## 🌐 웹 배포 (무료)
+
+다른 사람들과 공유하고 싶다면 **Streamlit Community Cloud**에 무료로 배포하세요!
+
+### 빠른 배포 (3단계)
+
+1. **GitHub 계정으로 [Streamlit Cloud](https://share.streamlit.io)에 로그인**
+2. **"New app" 클릭 후 이 리포지토리 선택**
+   - Repository: `stat17-hb/investment`
+   - Branch: `claude/test-standard-deviation-trading-011CUNJadSgHKbWmXBk3f9jk`
+   - Main file: `app.py`
+3. **"Deploy!" 클릭 → 2분 후 완료!**
+
+자세한 배포 가이드는 **[DEPLOYMENT.md](DEPLOYMENT.md)** 참고
+
+### 배포 후 얻을 수 있는 것
+
+- 🌐 **무료 공개 URL** (예: `https://your-app.streamlit.app`)
+- 🔄 **자동 업데이트** (코드 푸시 시)
+- 📱 **모바일 접근 가능**
+- 👥 **무제한 방문자**
+
 ## 📊 기능
 
 ### 1. 현재 분석

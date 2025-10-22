@@ -6,10 +6,30 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
+import time
 
 from data_fetcher import DataFetcher
 from strategy import StandardDeviationStrategy
 from backtest import Backtester
+
+
+# 데이터 가져오기 함수 (캐싱 적용)
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_stock_data(ticker: str, period: str):
+    """주가 데이터 가져오기 (1시간 캐시)"""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            fetcher = DataFetcher(ticker)
+            data = fetcher.get_historical_data(period=period)
+            info = fetcher.get_info()
+            return data, info
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            else:
+                raise e
 
 
 # 페이지 설정
@@ -104,18 +124,14 @@ use_ma_exit = st.sidebar.checkbox(
 
 # 데이터 로드 버튼
 if st.sidebar.button("🔄 분석 시작", type="primary"):
-    with st.spinner(f"{ticker} 데이터를 가져오는 중..."):
-        try:
-            # 데이터 가져오기
-            fetcher = DataFetcher(ticker)
-            data = fetcher.get_historical_data(period=period)
+    try:
+        with st.spinner(f"{ticker} 데이터를 가져오는 중..."):
+            # 캐싱된 함수로 데이터 가져오기
+            data, info = fetch_stock_data(ticker, period)
 
             if len(data) < lookback:
                 st.error(f"데이터가 충분하지 않습니다. 최소 {lookback}일의 데이터가 필요합니다.")
                 st.stop()
-
-            # 종목 정보
-            info = fetcher.get_info()
 
             st.success(f"✅ {info['name']} 데이터 로드 완료!")
 
@@ -146,9 +162,31 @@ if st.sidebar.button("🔄 분석 시작", type="primary"):
             st.session_state['backtest_results'] = backtest_results
             st.session_state['info'] = info
 
-        except Exception as e:
-            st.error(f"❌ 오류 발생: {str(e)}")
-            st.stop()
+    except Exception as e:
+        st.error(f"❌ 오류 발생: {str(e)}")
+
+        # 도움말 표시
+        with st.expander("💡 문제 해결 방법"):
+            st.markdown("""
+            **일반적인 오류 해결:**
+
+            1. **종목 티커 확인**
+               - 올바른 티커인지 확인 (예: SOXL, TQQQ, SPY)
+               - [Yahoo Finance](https://finance.yahoo.com)에서 검색 가능
+
+            2. **데이터 로드 실패**
+               - 잠시 후 다시 시도
+               - 다른 종목으로 테스트
+
+            3. **메모리 부족**
+               - 데이터 기간을 줄여보세요 (2y → 1y)
+               - 브라우저 새로고침
+
+            4. **연결 문제**
+               - 인터넷 연결 확인
+               - VPN 사용 시 해제 후 시도
+            """)
+        st.stop()
 
 # 결과 표시
 if 'backtest_results' in st.session_state:
@@ -576,8 +614,26 @@ else:
     # 초기 화면
     st.info("👈 왼쪽 사이드바에서 종목과 설정을 입력한 후 '분석 시작' 버튼을 클릭하세요.")
 
+    # 빠른 시작 가이드
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        st.subheader("🚀 빠른 시작")
+        st.markdown("""
+        1. **종목 티커** 입력 (예: SOXL, TQQQ, SPY)
+        2. **백테스트 설정** 조정 (기본값도 좋습니다)
+        3. **분석 시작** 클릭
+        4. **결과 확인** 및 CSV 다운로드
+        """)
+
+    with col2:
+        st.subheader("📊 데모 영상")
+        st.info("곧 제공 예정")
+
+    st.markdown("---")
+
     # 예시 종목
-    st.subheader("추천 종목")
+    st.subheader("💡 추천 종목")
     st.markdown("""
     **레버리지 ETF:**
     - `SOXL`: 반도체 3배 레버리지
