@@ -21,7 +21,11 @@ class Backtester:
         position_size: float = 1000,
         sigma_level: int = 1,
         take_profit_pct: float = 10.0,
-        use_ma_exit: bool = True
+        use_ma_exit: bool = True,
+        use_stop_loss: bool = False,
+        stop_loss_pct: float = 5.0,
+        use_trailing_stop: bool = False,
+        trailing_stop_pct: float = 10.0
     ):
         """
         Args:
@@ -31,6 +35,10 @@ class Backtester:
             sigma_level: 매수 기준 (1 또는 2)
             take_profit_pct: 목표 수익률 (%)
             use_ma_exit: 이동평균선 회귀 시 매도 여부
+            use_stop_loss: 손절선 사용 여부
+            stop_loss_pct: 손절 비율 (%)
+            use_trailing_stop: 트레일링 스톱 사용 여부
+            trailing_stop_pct: 트레일링 스톱 비율 (%)
         """
         self.data = data.copy()
         self.initial_capital = initial_capital
@@ -38,6 +46,10 @@ class Backtester:
         self.sigma_level = sigma_level
         self.take_profit_pct = take_profit_pct / 100
         self.use_ma_exit = use_ma_exit
+        self.use_stop_loss = use_stop_loss
+        self.stop_loss_pct = stop_loss_pct / 100
+        self.use_trailing_stop = use_trailing_stop
+        self.trailing_stop_pct = trailing_stop_pct / 100
 
         self.positions = []
         self.trades = []
@@ -67,7 +79,8 @@ class Backtester:
                     'buy_price': current_price,
                     'shares': shares,
                     'buy_date': idx,
-                    'buy_signal': signal
+                    'buy_signal': signal,
+                    'peak_price': current_price  # 트레일링 스톱용 최고가
                 })
                 cash -= self.position_size
 
@@ -76,13 +89,30 @@ class Backtester:
             for position in holdings:
                 profit_pct = (current_price - position['buy_price']) / position['buy_price']
                 should_sell = False
+                sell_reason = ''
 
-                # 목표 수익률 달성
-                if profit_pct >= self.take_profit_pct:
+                # 최고가 업데이트 (트레일링 스톱용)
+                if current_price > position['peak_price']:
+                    position['peak_price'] = current_price
+
+                # 1. 손절선 (Stop Loss)
+                if self.use_stop_loss and profit_pct <= -self.stop_loss_pct:
+                    should_sell = True
+                    sell_reason = 'Stop Loss'
+
+                # 2. 트레일링 스톱 (Trailing Stop)
+                elif self.use_trailing_stop:
+                    drawdown_from_peak = (current_price - position['peak_price']) / position['peak_price']
+                    if drawdown_from_peak <= -self.trailing_stop_pct:
+                        should_sell = True
+                        sell_reason = 'Trailing Stop'
+
+                # 3. 목표 수익률 달성
+                elif profit_pct >= self.take_profit_pct:
                     should_sell = True
                     sell_reason = 'Take Profit'
 
-                # 이동평균선 회귀 (MA20 돌파)
+                # 4. 이동평균선 회귀 (MA20 돌파)
                 elif self.use_ma_exit and current_price > ma_20 and not pd.isna(ma_20):
                     if position['buy_price'] < ma_20:  # 매수가가 MA 아래였다면
                         should_sell = True

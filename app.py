@@ -122,6 +122,43 @@ use_ma_exit = st.sidebar.checkbox(
     help="가격이 MA20을 상향 돌파하면 매도"
 )
 
+st.sidebar.markdown("---")
+st.sidebar.subheader("위험 관리")
+
+# 손절선 (Stop Loss)
+use_stop_loss = st.sidebar.checkbox(
+    "손절선 사용",
+    value=False,
+    help="매수가 대비 일정 비율 이상 손실 시 매도"
+)
+
+stop_loss_pct = st.sidebar.slider(
+    "손절 비율 (%)",
+    min_value=1,
+    max_value=50,
+    value=10,
+    step=1,
+    disabled=not use_stop_loss,
+    help="매수가 대비 -n% 하락 시 손절 매도"
+)
+
+# 트레일링 스톱 (Trailing Stop)
+use_trailing_stop = st.sidebar.checkbox(
+    "트레일링 스톱 사용",
+    value=False,
+    help="보유 중 최고가 대비 일정 비율 하락 시 매도"
+)
+
+trailing_stop_pct = st.sidebar.slider(
+    "트레일링 스톱 비율 (%)",
+    min_value=1,
+    max_value=50,
+    value=15,
+    step=1,
+    disabled=not use_trailing_stop,
+    help="보유 중 최고가 대비 -n% 하락 시 매도"
+)
+
 # 데이터 로드 버튼
 if st.sidebar.button("🔄 분석 시작", type="primary"):
     try:
@@ -149,7 +186,11 @@ if st.sidebar.button("🔄 분석 시작", type="primary"):
                     position_size=position_size,
                     sigma_level=sigma_level,
                     take_profit_pct=take_profit,
-                    use_ma_exit=use_ma_exit
+                    use_ma_exit=use_ma_exit,
+                    use_stop_loss=use_stop_loss,
+                    stop_loss_pct=stop_loss_pct,
+                    use_trailing_stop=use_trailing_stop,
+                    trailing_stop_pct=trailing_stop_pct
                 )
                 backtest_results = backtester.run()
 
