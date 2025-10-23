@@ -159,6 +159,20 @@ trailing_stop_pct = st.sidebar.slider(
     help="보유 중 최고가 대비 -n% 하락 시 매도"
 )
 
+st.sidebar.markdown("---")
+st.sidebar.subheader("Buy & Hold 설정")
+
+# Buy & Hold 분할 매수
+buy_hold_splits = st.sidebar.selectbox(
+    "분할 매수 횟수",
+    options=[1, 3, 6, 12, 24],
+    index=0,
+    help="Buy & Hold 전략 시 전체 기간을 n등분하여 분할 매수"
+)
+
+if buy_hold_splits > 1:
+    st.sidebar.info(f"💡 전체 기간을 {buy_hold_splits}등분하여 각 시점에 균등 매수합니다.")
+
 # 데이터 로드 버튼
 if st.sidebar.button("🔄 분석 시작", type="primary"):
     try:
@@ -190,7 +204,8 @@ if st.sidebar.button("🔄 분석 시작", type="primary"):
                     use_stop_loss=use_stop_loss,
                     stop_loss_pct=stop_loss_pct,
                     use_trailing_stop=use_trailing_stop,
-                    trailing_stop_pct=trailing_stop_pct
+                    trailing_stop_pct=trailing_stop_pct,
+                    buy_hold_splits=buy_hold_splits
                 )
                 backtest_results = backtester.run()
 
@@ -334,33 +349,54 @@ if 'backtest_results' in st.session_state:
         st.markdown("---")
 
         # Buy & Hold 상세 정보
-        st.subheader("🆚 Buy & Hold 전략 비교")
+        st.subheader(f"🆚 Buy & Hold 전략 비교 ({backtest_results['buy_hold_n_splits']}분할 매수)")
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
 
         with col1:
             st.metric(
-                "B&H 매수 주식 수",
+                "B&H 총 매수 주식",
                 f"{backtest_results['buy_hold_shares']:.4f}주"
             )
 
         with col2:
             st.metric(
+                "B&H 평균 매수가",
+                f"${backtest_results['buy_hold_avg_buy_price']:.2f}"
+            )
+
+        with col3:
+            st.metric(
                 "B&H 최종 자산",
                 f"${backtest_results['buy_hold_final_value']:.2f}"
             )
 
-        with col3:
+        with col4:
             st.metric(
                 "B&H 수익률",
                 f"{backtest_results['buy_hold_return_pct']:.2f}%"
             )
 
-        with col4:
+        with col5:
             st.metric(
                 "B&H 최대 낙폭",
                 f"{backtest_results['buy_hold_mdd']:.2f}%"
             )
+
+        # 분할 매수 상세 정보 (2분할 이상일 때만)
+        if backtest_results['buy_hold_n_splits'] > 1:
+            with st.expander(f"📅 {backtest_results['buy_hold_n_splits']}회 분할 매수 상세 내역"):
+                buy_points_df = pd.DataFrame(backtest_results['buy_hold_buy_points'])
+                buy_points_df['date'] = pd.to_datetime(buy_points_df['date'])
+
+                st.dataframe(
+                    buy_points_df.style.format({
+                        'price': '${:.2f}',
+                        'shares': '{:.4f}주',
+                        'amount': '${:.2f}'
+                    }),
+                    use_container_width=True
+                )
 
         st.markdown("---")
 

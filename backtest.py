@@ -25,7 +25,8 @@ class Backtester:
         use_stop_loss: bool = False,
         stop_loss_pct: float = 5.0,
         use_trailing_stop: bool = False,
-        trailing_stop_pct: float = 10.0
+        trailing_stop_pct: float = 10.0,
+        buy_hold_splits: int = 1
     ):
         """
         Args:
@@ -39,6 +40,7 @@ class Backtester:
             stop_loss_pct: 손절 비율 (%)
             use_trailing_stop: 트레일링 스톱 사용 여부
             trailing_stop_pct: 트레일링 스톱 비율 (%)
+            buy_hold_splits: Buy & Hold 분할 매수 횟수
         """
         self.data = data.copy()
         self.initial_capital = initial_capital
@@ -50,6 +52,7 @@ class Backtester:
         self.stop_loss_pct = stop_loss_pct / 100
         self.use_trailing_stop = use_trailing_stop
         self.trailing_stop_pct = trailing_stop_pct / 100
+        self.buy_hold_splits = buy_hold_splits
 
         self.positions = []
         self.trades = []
@@ -194,6 +197,9 @@ class Backtester:
         buy_hold_shares = buy_hold_stats['shares']
         buy_hold_mdd = buy_hold_stats['max_drawdown_pct']
         buy_hold_portfolio_values = buy_hold_stats['portfolio_values']
+        buy_hold_avg_buy_price = buy_hold_stats['avg_buy_price']
+        buy_hold_buy_points = buy_hold_stats['buy_points']
+        buy_hold_n_splits = buy_hold_stats['n_splits']
 
         # 최대 낙폭 (MDD)
         portfolio_df['cummax'] = portfolio_df['total_value'].cummax()
@@ -217,6 +223,9 @@ class Backtester:
             'buy_hold_shares': buy_hold_shares,
             'buy_hold_mdd': buy_hold_mdd,
             'buy_hold_portfolio_values': buy_hold_portfolio_values,
+            'buy_hold_avg_buy_price': buy_hold_avg_buy_price,
+            'buy_hold_buy_points': buy_hold_buy_points,
+            'buy_hold_n_splits': buy_hold_n_splits,
             'max_drawdown_pct': max_drawdown,
             'portfolio_df': portfolio_df,
             'trades_df': trades_df
@@ -224,37 +233,80 @@ class Backtester:
 
     def calculate_buy_and_hold(self) -> dict:
         """
-        Buy & Hold 전략 정확한 계산
+        Buy & Hold 전략 정확한 계산 (분할 매수 지원)
 
         전략:
-        - 첫날 전체 자본금으로 최대한 매수
+        - 전체 기간을 n등분하여 분할 매수
+        - 각 시점에 (초기 자본 / n) 만큼 매수
         - 마지막 날까지 보유
         - 실제 주식 수량 기반 계산
 
         Returns:
-            shares: 매수한 주식 수량
-            buy_price: 매수 가격
+            shares: 총 매수한 주식 수량
+            avg_buy_price: 평균 매수 가격
             final_price: 최종 가격
             final_value: 최종 자산 가치
             return_pct: 수익률 (%)
             max_drawdown_pct: 최대 낙폭 (%)
+            buy_points: 매수 시점 정보
         """
-        first_price = self.data['Close'].iloc[0]
+        total_days = len(self.data)
+        n_splits = self.buy_hold_splits
+
+        # 분할 매수 간격 계산
+        if n_splits == 1:
+            buy_indices = [0]
+        else:
+            buy_indices = [int(i * total_days / n_splits) for i in range(n_splits)]
+
+        # 각 분할 시 투입할 금액
+        capital_per_split = self.initial_capital / n_splits
+
+        # 분할 매수 실행
+        total_shares = 0
+        total_invested = 0
+        buy_points = []
+
+        for idx in buy_indices:
+            buy_price = self.data['Close'].iloc[idx]
+            shares = capital_per_split / buy_price
+            total_shares += shares
+            total_invested += capital_per_split
+
+            buy_points.append({
+                'date': self.data.index[idx],
+                'price': buy_price,
+                'shares': shares,
+                'amount': capital_per_split
+            })
+
+        # 평균 매수 가격
+        avg_buy_price = total_invested / total_shares if total_shares > 0 else 0
+
+        # 최종 가격 및 자산 가치
         last_price = self.data['Close'].iloc[-1]
-
-        # 첫날 전체 자본으로 매수 가능한 주식 수
-        shares = self.initial_capital / first_price
-
-        # 마지막 날 자산 가치
-        final_value = shares * last_price
+        final_value = total_shares * last_price
 
         # 수익률
         return_pct = (final_value - self.initial_capital) / self.initial_capital * 100
 
         # 기간 동안의 최대 낙폭 (MDD) 계산
         portfolio_values = []
-        for idx, row in self.data.iterrows():
-            current_value = shares * row['Close']
+        cash_remaining = self.initial_capital
+        shares_accumulated = 0
+
+        buy_idx_set = set(buy_indices)
+
+        for i, (idx, row) in enumerate(self.data.iterrows()):
+            # 매수 시점이면 주식 매수
+            if i in buy_idx_set:
+                buy_price = row['Close']
+                shares = capital_per_split / buy_price
+                shares_accumulated += shares
+                cash_remaining -= capital_per_split
+
+            # 현재 포트폴리오 가치 = 보유 주식 가치 + 남은 현금
+            current_value = shares_accumulated * row['Close'] + cash_remaining
             portfolio_values.append(current_value)
 
         # MDD 계산
@@ -264,11 +316,14 @@ class Backtester:
         max_drawdown_pct = drawdown.min()
 
         return {
-            'shares': shares,
-            'buy_price': first_price,
+            'shares': total_shares,
+            'avg_buy_price': avg_buy_price,
+            'buy_price': self.data['Close'].iloc[0],  # 첫날 가격 (참고용)
             'final_price': last_price,
             'final_value': final_value,
             'return_pct': return_pct,
             'max_drawdown_pct': max_drawdown_pct,
-            'portfolio_values': portfolio_values
+            'portfolio_values': portfolio_values,
+            'buy_points': buy_points,
+            'n_splits': n_splits
         }
