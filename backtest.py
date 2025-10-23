@@ -187,10 +187,13 @@ class Backtester:
             max_loss = 0
             avg_holding_days = 0
 
-        # Buy & Hold 비교
-        first_price = self.data['Close'].iloc[0]
-        last_price = self.data['Close'].iloc[-1]
-        buy_hold_return = (last_price - first_price) / first_price * 100
+        # Buy & Hold 전략 시뮬레이션 (정확한 계산)
+        buy_hold_stats = self.calculate_buy_and_hold()
+        buy_hold_return = buy_hold_stats['return_pct']
+        buy_hold_final_value = buy_hold_stats['final_value']
+        buy_hold_shares = buy_hold_stats['shares']
+        buy_hold_mdd = buy_hold_stats['max_drawdown_pct']
+        buy_hold_portfolio_values = buy_hold_stats['portfolio_values']
 
         # 최대 낙폭 (MDD)
         portfolio_df['cummax'] = portfolio_df['total_value'].cummax()
@@ -210,7 +213,62 @@ class Backtester:
             'max_loss_pct': max_loss,
             'avg_holding_days': avg_holding_days,
             'buy_hold_return_pct': buy_hold_return,
+            'buy_hold_final_value': buy_hold_final_value,
+            'buy_hold_shares': buy_hold_shares,
+            'buy_hold_mdd': buy_hold_mdd,
+            'buy_hold_portfolio_values': buy_hold_portfolio_values,
             'max_drawdown_pct': max_drawdown,
             'portfolio_df': portfolio_df,
             'trades_df': trades_df
+        }
+
+    def calculate_buy_and_hold(self) -> dict:
+        """
+        Buy & Hold 전략 정확한 계산
+
+        전략:
+        - 첫날 전체 자본금으로 최대한 매수
+        - 마지막 날까지 보유
+        - 실제 주식 수량 기반 계산
+
+        Returns:
+            shares: 매수한 주식 수량
+            buy_price: 매수 가격
+            final_price: 최종 가격
+            final_value: 최종 자산 가치
+            return_pct: 수익률 (%)
+            max_drawdown_pct: 최대 낙폭 (%)
+        """
+        first_price = self.data['Close'].iloc[0]
+        last_price = self.data['Close'].iloc[-1]
+
+        # 첫날 전체 자본으로 매수 가능한 주식 수
+        shares = self.initial_capital / first_price
+
+        # 마지막 날 자산 가치
+        final_value = shares * last_price
+
+        # 수익률
+        return_pct = (final_value - self.initial_capital) / self.initial_capital * 100
+
+        # 기간 동안의 최대 낙폭 (MDD) 계산
+        portfolio_values = []
+        for idx, row in self.data.iterrows():
+            current_value = shares * row['Close']
+            portfolio_values.append(current_value)
+
+        # MDD 계산
+        portfolio_series = pd.Series(portfolio_values)
+        cummax = portfolio_series.cummax()
+        drawdown = (portfolio_series - cummax) / cummax * 100
+        max_drawdown_pct = drawdown.min()
+
+        return {
+            'shares': shares,
+            'buy_price': first_price,
+            'final_price': last_price,
+            'final_value': final_value,
+            'return_pct': return_pct,
+            'max_drawdown_pct': max_drawdown_pct,
+            'portfolio_values': portfolio_values
         }

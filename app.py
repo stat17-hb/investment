@@ -333,6 +333,37 @@ if 'backtest_results' in st.session_state:
 
         st.markdown("---")
 
+        # Buy & Hold 상세 정보
+        st.subheader("🆚 Buy & Hold 전략 비교")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "B&H 매수 주식 수",
+                f"{backtest_results['buy_hold_shares']:.4f}주"
+            )
+
+        with col2:
+            st.metric(
+                "B&H 최종 자산",
+                f"${backtest_results['buy_hold_final_value']:.2f}"
+            )
+
+        with col3:
+            st.metric(
+                "B&H 수익률",
+                f"{backtest_results['buy_hold_return_pct']:.2f}%"
+            )
+
+        with col4:
+            st.metric(
+                "B&H 최대 낙폭",
+                f"{backtest_results['buy_hold_mdd']:.2f}%"
+            )
+
+        st.markdown("---")
+
         # 비교 차트
         col1, col2 = st.columns(2)
 
@@ -343,6 +374,10 @@ if 'backtest_results' in st.session_state:
                 '수익률 (%)': [
                     backtest_results['total_return_pct'],
                     backtest_results['buy_hold_return_pct']
+                ],
+                '최종 자산': [
+                    backtest_results['final_value'],
+                    backtest_results['buy_hold_final_value']
                 ]
             })
 
@@ -368,23 +403,43 @@ if 'backtest_results' in st.session_state:
             portfolio_df = backtest_results['portfolio_df']
 
             fig = go.Figure()
+
+            # 표준편차 매매법 라인
             fig.add_trace(go.Scatter(
                 x=portfolio_df['date'],
                 y=portfolio_df['total_value'],
                 mode='lines',
-                name='포트폴리오 가치',
+                name='표준편차 매매법',
                 line=dict(color='#00cc96', width=2)
             ))
+
+            # Buy & Hold 라인
+            fig.add_trace(go.Scatter(
+                x=portfolio_df['date'],
+                y=backtest_results['buy_hold_portfolio_values'],
+                mode='lines',
+                name='Buy & Hold',
+                line=dict(color='#636EFA', width=2, dash='dash')
+            ))
+
+            # 초기 자본 기준선
             fig.add_hline(
                 y=initial_capital,
-                line_dash="dash",
+                line_dash="dot",
                 line_color="gray",
                 annotation_text="초기 자본"
             )
+
             fig.update_layout(
                 yaxis_title="가치 ($)",
                 height=400,
-                hovermode='x unified'
+                hovermode='x unified',
+                legend=dict(
+                    yanchor="top",
+                    y=0.99,
+                    xanchor="left",
+                    x=0.01
+                )
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -407,11 +462,31 @@ if 'backtest_results' in st.session_state:
             st.write(f"- 평균 보유: {backtest_results['avg_holding_days']:.1f}일")
 
         with col3:
-            st.write("**비교**")
-            st.write(f"- Buy&Hold: {backtest_results['buy_hold_return_pct']:.2f}%")
+            st.write("**전략 vs Buy & Hold**")
             st.write(f"- 전략 수익: {backtest_results['total_return_pct']:.2f}%")
+            st.write(f"- B&H 수익: {backtest_results['buy_hold_return_pct']:.2f}%")
             outperformance = backtest_results['total_return_pct'] - backtest_results['buy_hold_return_pct']
-            st.write(f"- 초과 수익: {outperformance:.2f}%")
+            st.write(f"- 초과 수익: {outperformance:+.2f}%")
+
+        # MDD 비교
+        st.markdown("---")
+        st.subheader("🛡️ 리스크 비교 (최대 낙폭)")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.metric(
+                "표준편차 매매법 MDD",
+                f"{backtest_results['max_drawdown_pct']:.2f}%",
+                delta=f"{backtest_results['max_drawdown_pct'] - backtest_results['buy_hold_mdd']:.2f}% vs B&H",
+                delta_color="inverse"
+            )
+
+        with col2:
+            st.metric(
+                "Buy & Hold MDD",
+                f"{backtest_results['buy_hold_mdd']:.2f}%"
+            )
 
     # 탭 3: 차트
     with tab3:
