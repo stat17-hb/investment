@@ -110,7 +110,7 @@ sigma_level = st.sidebar.radio(
 take_profit = st.sidebar.slider(
     "목표 수익률 (%)",
     min_value=5,
-    max_value=50,
+    max_value=900,
     value=10,
     step=5
 )
@@ -118,7 +118,7 @@ take_profit = st.sidebar.slider(
 # 이동평균선 매도 사용
 use_ma_exit = st.sidebar.checkbox(
     "이동평균선(MA20) 회귀 시 매도",
-    value=True,
+    value=False,
     help="가격이 MA20을 상향 돌파하면 매도"
 )
 
