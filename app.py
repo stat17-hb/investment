@@ -173,6 +173,13 @@ buy_hold_splits = st.sidebar.selectbox(
 if buy_hold_splits > 1:
     st.sidebar.info(f"💡 전체 기간을 {buy_hold_splits}등분하여 각 시점에 균등 매수합니다.")
 
+# Buy & Hold 위험 관리 적용
+buy_hold_use_risk_mgmt = st.sidebar.checkbox(
+    "Buy & Hold에도 위험 관리 적용",
+    value=False,
+    help="체크 시 Buy & Hold 전략에도 손절선, 트레일링 스톱, 목표 수익률이 적용됩니다"
+)
+
 # 데이터 로드 버튼
 if st.sidebar.button("🔄 분석 시작", type="primary"):
     try:
@@ -205,7 +212,8 @@ if st.sidebar.button("🔄 분석 시작", type="primary"):
                     stop_loss_pct=stop_loss_pct,
                     use_trailing_stop=use_trailing_stop,
                     trailing_stop_pct=trailing_stop_pct,
-                    buy_hold_splits=buy_hold_splits
+                    buy_hold_splits=buy_hold_splits,
+                    buy_hold_use_risk_mgmt=buy_hold_use_risk_mgmt
                 )
                 backtest_results = backtester.run()
 
@@ -397,6 +405,28 @@ if 'backtest_results' in st.session_state:
                     }),
                     use_container_width=True
                 )
+
+        # Buy & Hold 거래 내역 (위험 관리 적용 시)
+        buy_hold_stats = backtest_results.get('buy_hold_stats', {})
+        if buy_hold_stats.get('use_risk_mgmt', False) and buy_hold_stats.get('trades'):
+            with st.expander(f"📊 Buy & Hold 거래 내역 (위험 관리 적용) - {len(buy_hold_stats['trades'])}건"):
+                bh_trades_df = pd.DataFrame(buy_hold_stats['trades'])
+                st.dataframe(
+                    bh_trades_df.style.format({
+                        'buy_price': '${:.2f}',
+                        'sell_price': '${:.2f}',
+                        'shares': '{:.4f}',
+                        'profit_pct': '{:.2f}%',
+                        'profit_amount': '${:.2f}'
+                    }),
+                    use_container_width=True
+                )
+
+                # 위험 관리 통계
+                st.write("**매도 사유별 통계:**")
+                sell_reasons = bh_trades_df['sell_reason'].value_counts()
+                for reason, count in sell_reasons.items():
+                    st.write(f"- {reason}: {count}회")
 
         st.markdown("---")
 
