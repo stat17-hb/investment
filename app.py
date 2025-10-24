@@ -588,18 +588,21 @@ if 'backtest_results' in st.session_state:
         performance_df = pd.DataFrame({
             '지표': [
                 '초기 자본',
+                '총 매수 금액',
                 '최종 자산',
                 '총 수익률',
                 '연평균 수익률 (CAGR)'
             ],
             '표준편차 매매법': [
                 f"${backtest_results['initial_capital']:,.2f}",
+                f"${backtest_results['total_invested']:,.2f}",
                 f"${backtest_results['final_value']:,.2f}",
                 f"{backtest_results['total_return_pct']:.2f}%",
                 f"{backtest_results['cagr']:.2f}%"
             ],
             f"Buy & Hold ({backtest_results['buy_hold_n_splits']}개월)": [
                 f"${backtest_results['initial_capital']:,.2f}",
+                f"${backtest_results['buy_hold_total_invested']:,.2f}",
                 f"${backtest_results['buy_hold_final_value']:,.2f}",
                 f"{backtest_results['buy_hold_return_pct']:.2f}%",
                 f"{backtest_results['buy_hold_cagr']:.2f}%"

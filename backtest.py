@@ -60,6 +60,7 @@ class Backtester:
         self.positions = []
         self.trades = []
         self.portfolio_value = []
+        self.total_invested = 0  # 총 매수 금액
 
     def run(self) -> dict:
         """백테스트 실행"""
@@ -89,6 +90,7 @@ class Backtester:
                     'peak_price': current_price  # 트레일링 스톱용 최고가
                 })
                 cash -= self.position_size
+                self.total_invested += self.position_size  # 총 매수 금액 누적
 
             # 매도 조건 체크 (보유 포지션이 있을 때)
             new_holdings = []
@@ -290,10 +292,14 @@ class Backtester:
         calmar_ratio = cagr / abs(max_drawdown) if max_drawdown < 0 else 0
         buy_hold_calmar = buy_hold_cagr / abs(buy_hold_mdd) if buy_hold_mdd < 0 else 0
 
+        # Buy & Hold 총 매수금액 계산
+        buy_hold_total_invested = sum([bp['amount'] for bp in buy_hold_buy_points]) if buy_hold_buy_points else 0
+
         return {
             'initial_capital': self.initial_capital,
             'final_value': final_value,
             'total_return_pct': total_return,
+            'total_invested': self.total_invested,  # 총 매수 금액
             'cagr': cagr,
             'sharpe_ratio': sharpe_ratio,
             'sortino_ratio': sortino_ratio,
@@ -313,6 +319,7 @@ class Backtester:
             'buy_hold_sharpe': buy_hold_sharpe,
             'buy_hold_volatility': buy_hold_volatility,
             'buy_hold_calmar': buy_hold_calmar,
+            'buy_hold_total_invested': buy_hold_total_invested,  # Buy & Hold 총 매수 금액
             'buy_hold_final_value': buy_hold_final_value,
             'buy_hold_shares': buy_hold_shares,
             'buy_hold_mdd': buy_hold_mdd,
