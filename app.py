@@ -569,68 +569,141 @@ if 'backtest_results' in st.session_state:
     with tab2:
         st.header("📊 백테스트 성과 비교")
 
-        # 비교 테이블
+        # 비교 테이블 - 주요 성과 지표
         buy_hold_stats = backtest_results.get('buy_hold_stats', {})
-        comparison_df = pd.DataFrame({
+
+        # 섹션 1: 수익성 지표
+        st.subheader("💰 수익성 지표")
+        performance_df = pd.DataFrame({
             '지표': [
                 '초기 자본',
                 '최종 자산',
-                '총 수익률 (%)',
-                '최대 낙폭 (MDD %)',
-                '총 거래 횟수',
-                '승률 (%)',
-                '평균 수익률 (%)',
-                '평균 보유 기간 (일)',
-                '최대 수익 (%)',
-                '최대 손실 (%)',
-                '평균 수익 거래 (%)',
-                '평균 손실 거래 (%)'
+                '총 수익률',
+                '연평균 수익률 (CAGR)'
             ],
             '표준편차 매매법': [
                 f"${backtest_results['initial_capital']:,.2f}",
                 f"${backtest_results['final_value']:,.2f}",
                 f"{backtest_results['total_return_pct']:.2f}%",
-                f"{backtest_results['max_drawdown_pct']:.2f}%",
-                f"{backtest_results['total_trades']}회",
-                f"{backtest_results['win_rate']:.1f}%",
-                f"{backtest_results['avg_profit_pct']:.2f}%",
-                f"{backtest_results['avg_holding_days']:.1f}일",
-                f"{backtest_results['max_profit_pct']:.2f}%",
-                f"{backtest_results['max_loss_pct']:.2f}%",
-                f"{backtest_results['avg_win_pct']:.2f}%",
-                f"{backtest_results['avg_loss_pct']:.2f}%"
+                f"{backtest_results['cagr']:.2f}%"
             ],
             f"Buy & Hold ({backtest_results['buy_hold_n_splits']}분할)": [
                 f"${backtest_results['initial_capital']:,.2f}",
                 f"${backtest_results['buy_hold_final_value']:,.2f}",
                 f"{backtest_results['buy_hold_return_pct']:.2f}%",
-                f"{backtest_results['buy_hold_mdd']:.2f}%",
-                f"{len(buy_hold_stats.get('trades', []))}회" if buy_hold_stats.get('use_risk_mgmt') else "N/A",
-                "N/A",
-                "N/A",
-                "N/A",
-                "N/A",
-                "N/A",
-                "N/A",
-                "N/A"
+                f"{backtest_results['buy_hold_cagr']:.2f}%"
             ]
         })
 
-        # 테이블 표시
-        st.dataframe(
-            comparison_df,
-            use_container_width=True,
-            hide_index=True
-        )
+        st.dataframe(performance_df, use_container_width=True, hide_index=True)
+
+        # 섹션 2: 위험 조정 성과 지표
+        st.subheader("📈 위험 조정 성과 지표")
+        st.caption("높을수록 위험 대비 수익이 좋음을 의미합니다.")
+        risk_adjusted_df = pd.DataFrame({
+            '지표': [
+                '샤프 비율 (Sharpe Ratio)',
+                '소티노 비율 (Sortino Ratio)',
+                '칼마 비율 (Calmar Ratio)'
+            ],
+            '표준편차 매매법': [
+                f"{backtest_results['sharpe_ratio']:.2f}",
+                f"{backtest_results['sortino_ratio']:.2f}",
+                f"{backtest_results['calmar_ratio']:.2f}"
+            ],
+            f"Buy & Hold ({backtest_results['buy_hold_n_splits']}분할)": [
+                f"{backtest_results['buy_hold_sharpe']:.2f}",
+                "N/A",
+                f"{backtest_results['buy_hold_calmar']:.2f}"
+            ]
+        })
+
+        st.dataframe(risk_adjusted_df, use_container_width=True, hide_index=True)
+
+        # 섹션 3: 위험 지표
+        st.subheader("⚠️ 위험 지표")
+        risk_df = pd.DataFrame({
+            '지표': [
+                '최대 낙폭 (MDD)',
+                '변동성 (연율화)'
+            ],
+            '표준편차 매매법': [
+                f"{backtest_results['max_drawdown_pct']:.2f}%",
+                f"{backtest_results['volatility']:.2f}%"
+            ],
+            f"Buy & Hold ({backtest_results['buy_hold_n_splits']}분할)": [
+                f"{backtest_results['buy_hold_mdd']:.2f}%",
+                f"{backtest_results['buy_hold_volatility']:.2f}%"
+            ]
+        })
+
+        st.dataframe(risk_df, use_container_width=True, hide_index=True)
+
+        # 섹션 4: 거래 지표 (표준편차 매매법만)
+        st.subheader("💼 거래 지표")
+        trading_df = pd.DataFrame({
+            '지표': [
+                '총 거래 횟수',
+                '승률',
+                '손익비 (Profit Factor)',
+                '평균 보유 기간',
+                '평균 수익 거래',
+                '평균 손실 거래'
+            ],
+            '표준편차 매매법': [
+                f"{backtest_results['total_trades']}회",
+                f"{backtest_results['win_rate']:.1f}%",
+                f"{backtest_results['profit_factor']:.2f}",
+                f"{backtest_results['avg_holding_days']:.1f}일",
+                f"{backtest_results['avg_win_pct']:.2f}%",
+                f"{backtest_results['avg_loss_pct']:.2f}%"
+            ]
+        })
+
+        st.dataframe(trading_df, use_container_width=True, hide_index=True)
+
+        # 지표 설명
+        with st.expander("📖 주요 지표 설명"):
+            st.markdown("""
+            ### 수익성 지표
+            - **CAGR (연평균 복리 수익률)**: 투자 기간을 연 단위로 환산한 복리 수익률. 장기 성과 비교에 유용합니다.
+
+            ### 위험 조정 성과 지표
+            - **샤프 비율**: 위험 대비 초과 수익률. 1 이상이면 양호, 2 이상이면 우수합니다.
+            - **소티노 비율**: 샤프 비율과 유사하지만 하방 변동성만 고려. 손실 위험에 더 집중한 지표입니다.
+            - **칼마 비율**: 연평균 수익률을 최대 낙폭으로 나눈 값. 낙폭 대비 수익성을 평가합니다.
+
+            ### 위험 지표
+            - **MDD (최대 낙폭)**: 최고점 대비 최대 하락폭. 투자자가 경험할 수 있는 최악의 손실입니다.
+            - **변동성**: 수익률의 표준편차 (연율화). 가격 변동의 크기를 측정합니다.
+
+            ### 거래 지표
+            - **손익비 (Profit Factor)**: 총 이익 / 총 손실. 1보다 커야 수익 전략입니다.
+            - **승률**: 전체 거래 중 수익을 낸 거래의 비율입니다.
+            """)
+
+        st.markdown("---")
 
         # 초과 수익률 강조
         outperformance = backtest_results['total_return_pct'] - backtest_results['buy_hold_return_pct']
-        if outperformance > 0:
-            st.success(f"✅ 표준편차 매매법이 Buy & Hold 대비 **{outperformance:+.2f}%** 초과 수익")
-        elif outperformance < 0:
-            st.warning(f"⚠️ 표준편차 매매법이 Buy & Hold 대비 **{outperformance:.2f}%** 저조")
-        else:
-            st.info("ℹ️ 표준편차 매매법과 Buy & Hold의 수익률이 동일합니다")
+        cagr_outperformance = backtest_results['cagr'] - backtest_results['buy_hold_cagr']
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if outperformance > 0:
+                st.success(f"✅ **총 수익률 차이**\n\n표준편차 매매법이 Buy & Hold 대비 **{outperformance:+.2f}%** 초과 수익")
+            elif outperformance < 0:
+                st.warning(f"⚠️ **총 수익률 차이**\n\n표준편차 매매법이 Buy & Hold 대비 **{outperformance:.2f}%** 저조")
+            else:
+                st.info("ℹ️ **총 수익률 차이**\n\n표준편차 매매법과 Buy & Hold의 수익률이 동일합니다")
+
+        with col2:
+            if cagr_outperformance > 0:
+                st.success(f"✅ **CAGR 차이**\n\n표준편차 매매법이 Buy & Hold 대비 **{cagr_outperformance:+.2f}%** 높음")
+            elif cagr_outperformance < 0:
+                st.warning(f"⚠️ **CAGR 차이**\n\n표준편차 매매법이 Buy & Hold 대비 **{cagr_outperformance:.2f}%** 낮음")
+            else:
+                st.info("ℹ️ **CAGR 차이**\n\n표준편차 매매법과 Buy & Hold의 CAGR이 동일합니다")
 
         st.markdown("---")
 

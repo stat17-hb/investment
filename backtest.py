@@ -199,14 +199,20 @@ class Backtester:
 
         if not trades_df.empty:
             win_trades = trades_df[trades_df['profit_pct'] > 0]
+            loss_trades = trades_df[trades_df['profit_pct'] < 0]
             win_rate = len(win_trades) / len(trades_df) * 100
             avg_profit = trades_df['profit_pct'].mean()
             avg_win = win_trades['profit_pct'].mean() if len(win_trades) > 0 else 0
-            avg_loss = trades_df[trades_df['profit_pct'] < 0]['profit_pct'].mean()
+            avg_loss = loss_trades['profit_pct'].mean()
             avg_loss = avg_loss if not pd.isna(avg_loss) else 0
             max_profit = trades_df['profit_pct'].max()
             max_loss = trades_df['profit_pct'].min()
             avg_holding_days = trades_df['holding_days'].mean()
+
+            # 손익비 (Profit Factor)
+            total_profit = win_trades['profit_amount'].sum() if len(win_trades) > 0 else 0
+            total_loss = abs(loss_trades['profit_amount'].sum()) if len(loss_trades) > 0 else 0
+            profit_factor = total_profit / total_loss if total_loss > 0 else 0
         else:
             win_rate = 0
             avg_profit = 0
@@ -215,6 +221,37 @@ class Backtester:
             max_profit = 0
             max_loss = 0
             avg_holding_days = 0
+            profit_factor = 0
+
+        # 일일 수익률 계산
+        portfolio_df['daily_return'] = portfolio_df['total_value'].pct_change()
+        daily_returns = portfolio_df['daily_return'].dropna()
+
+        # 연평균 복리 수익률 (CAGR)
+        years = len(self.data) / 252  # 252 거래일 = 1년
+        if years > 0 and final_value > 0:
+            cagr = (pow(final_value / self.initial_capital, 1 / years) - 1) * 100
+        else:
+            cagr = 0
+
+        # 변동성 (연율화)
+        volatility = daily_returns.std() * np.sqrt(252) * 100 if len(daily_returns) > 0 else 0
+
+        # 샤프 비율 (무위험 수익률 = 0 가정)
+        if volatility > 0 and len(daily_returns) > 0:
+            avg_daily_return = daily_returns.mean()
+            sharpe_ratio = (avg_daily_return / daily_returns.std()) * np.sqrt(252)
+        else:
+            sharpe_ratio = 0
+
+        # 소티노 비율 (하방 변동성만 고려)
+        negative_returns = daily_returns[daily_returns < 0]
+        if len(negative_returns) > 0 and len(daily_returns) > 0:
+            downside_std = negative_returns.std() * np.sqrt(252)
+            avg_daily_return = daily_returns.mean()
+            sortino_ratio = (avg_daily_return * 252) / downside_std if downside_std > 0 else 0
+        else:
+            sortino_ratio = 0
 
         # Buy & Hold 전략 시뮬레이션 (정확한 계산)
         buy_hold_stats = self.calculate_buy_and_hold()
@@ -226,19 +263,45 @@ class Backtester:
         buy_hold_avg_buy_price = buy_hold_stats['avg_buy_price']
         buy_hold_buy_points = buy_hold_stats['buy_points']
         buy_hold_n_splits = buy_hold_stats['n_splits']
-        # 전체 buy_hold_stats를 결과에 포함 (trades 정보 포함)
+
+        # Buy & Hold CAGR
+        if years > 0 and buy_hold_final_value > 0:
+            buy_hold_cagr = (pow(buy_hold_final_value / self.initial_capital, 1 / years) - 1) * 100
+        else:
+            buy_hold_cagr = 0
+
+        # Buy & Hold 변동성
+        buy_hold_series = pd.Series(buy_hold_portfolio_values)
+        buy_hold_daily_returns = buy_hold_series.pct_change().dropna()
+        buy_hold_volatility = buy_hold_daily_returns.std() * np.sqrt(252) * 100 if len(buy_hold_daily_returns) > 0 else 0
+
+        # Buy & Hold 샤프 비율
+        if buy_hold_volatility > 0 and len(buy_hold_daily_returns) > 0:
+            buy_hold_sharpe = (buy_hold_daily_returns.mean() / buy_hold_daily_returns.std()) * np.sqrt(252)
+        else:
+            buy_hold_sharpe = 0
 
         # 최대 낙폭 (MDD)
         portfolio_df['cummax'] = portfolio_df['total_value'].cummax()
         portfolio_df['drawdown'] = (portfolio_df['total_value'] - portfolio_df['cummax']) / portfolio_df['cummax'] * 100
         max_drawdown = portfolio_df['drawdown'].min()
 
+        # 칼마 비율 (CAGR / abs(MDD))
+        calmar_ratio = cagr / abs(max_drawdown) if max_drawdown < 0 else 0
+        buy_hold_calmar = buy_hold_cagr / abs(buy_hold_mdd) if buy_hold_mdd < 0 else 0
+
         return {
             'initial_capital': self.initial_capital,
             'final_value': final_value,
             'total_return_pct': total_return,
+            'cagr': cagr,
+            'sharpe_ratio': sharpe_ratio,
+            'sortino_ratio': sortino_ratio,
+            'volatility': volatility,
+            'calmar_ratio': calmar_ratio,
             'total_trades': len(trades_df),
             'win_rate': win_rate,
+            'profit_factor': profit_factor,
             'avg_profit_pct': avg_profit,
             'avg_win_pct': avg_win,
             'avg_loss_pct': avg_loss,
@@ -246,6 +309,10 @@ class Backtester:
             'max_loss_pct': max_loss,
             'avg_holding_days': avg_holding_days,
             'buy_hold_return_pct': buy_hold_return,
+            'buy_hold_cagr': buy_hold_cagr,
+            'buy_hold_sharpe': buy_hold_sharpe,
+            'buy_hold_volatility': buy_hold_volatility,
+            'buy_hold_calmar': buy_hold_calmar,
             'buy_hold_final_value': buy_hold_final_value,
             'buy_hold_shares': buy_hold_shares,
             'buy_hold_mdd': buy_hold_mdd,
