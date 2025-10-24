@@ -328,11 +328,11 @@ class Backtester:
 
     def calculate_buy_and_hold(self) -> dict:
         """
-        Buy & Hold 전략 정확한 계산 (분할 매수 + 선택적 위험 관리)
+        Buy & Hold 전략 정확한 계산 (월별 분할 매수 + 선택적 위험 관리)
 
         전략:
-        - 전체 기간을 n등분하여 분할 매수
-        - 각 시점에 (초기 자본 / n) 만큼 매수
+        - n개월 동안 매월 첫 거래일에 분할 매수
+        - 각 월에 (초기 자본 / n) 만큼 매수
         - 선택적으로 위험 관리 적용 (손절선, 트레일링 스톱, 목표 수익률)
         - 실제 주식 수량 기반 계산
 
@@ -346,46 +346,60 @@ class Backtester:
             buy_points: 매수 시점 정보
             trades: 거래 내역 (위험 관리 적용 시)
         """
-        total_days = len(self.data)
-        n_splits = self.buy_hold_splits
-
-        # 분할 매수 간격 계산
-        if n_splits == 1:
-            buy_indices = [0]
-        else:
-            buy_indices = [int(i * total_days / n_splits) for i in range(n_splits)]
+        n_months = self.buy_hold_splits
 
         # 각 분할 시 투입할 금액
-        capital_per_split = self.initial_capital / n_splits
+        capital_per_month = self.initial_capital / n_months
 
         # 포트폴리오 상태
         cash_remaining = self.initial_capital
         holdings = []  # [{'buy_price': price, 'shares': shares, 'buy_date': date, 'peak_price': price}]
-        buy_idx_set = set(buy_indices)
         portfolio_values = []
         buy_points = []
         trades = []  # 위험 관리로 인한 거래 기록
 
+        # 매월 첫 거래일 찾기
+        data_with_month = self.data.copy()
+        data_with_month['year_month'] = data_with_month.index.to_period('M')
+
+        # 각 월의 첫 거래일 인덱스 찾기
+        first_trading_days = []
+        seen_months = set()
+
+        for idx in data_with_month.index:
+            year_month = data_with_month.loc[idx, 'year_month']
+            if year_month not in seen_months:
+                first_trading_days.append(idx)
+                seen_months.add(year_month)
+                if len(first_trading_days) >= n_months:
+                    break
+
+        # 실제로 매수할 월 수 (데이터가 부족할 수 있음)
+        actual_n_months = len(first_trading_days)
+        buy_dates_set = set(first_trading_days)
+
         # 매일 시뮬레이션
-        for i, (idx, row) in enumerate(self.data.iterrows()):
+        months_bought = 0
+        for idx, row in self.data.iterrows():
             current_price = row['Close']
 
             # 매수 시점이면 주식 매수
-            if i in buy_idx_set and cash_remaining >= capital_per_split:
-                shares = capital_per_split / current_price
+            if idx in buy_dates_set and months_bought < actual_n_months and cash_remaining >= capital_per_month:
+                shares = capital_per_month / current_price
                 holdings.append({
                     'buy_price': current_price,
                     'shares': shares,
                     'buy_date': idx,
                     'peak_price': current_price
                 })
-                cash_remaining -= capital_per_split
+                cash_remaining -= capital_per_month
+                months_bought += 1
 
                 buy_points.append({
                     'date': idx,
                     'price': current_price,
                     'shares': shares,
-                    'amount': capital_per_split
+                    'amount': capital_per_month
                 })
 
             # 위험 관리 적용 시 매도 조건 체크
@@ -496,7 +510,7 @@ class Backtester:
             'max_drawdown_pct': max_drawdown_pct,
             'portfolio_values': portfolio_values,
             'buy_points': buy_points,
-            'n_splits': n_splits,
+            'n_splits': actual_n_months,  # 실제 매수한 월 수
             'trades': trades,
             'use_risk_mgmt': self.buy_hold_use_risk_mgmt
         }

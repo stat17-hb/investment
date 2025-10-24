@@ -329,14 +329,14 @@ st.sidebar.subheader("Buy & Hold 설정")
 
 # Buy & Hold 분할 매수
 buy_hold_splits = st.sidebar.selectbox(
-    "분할 매수 횟수",
+    "분할 매수 기간 (개월)",
     options=[1, 3, 6, 12, 24],
     index=0,
-    help="Buy & Hold 전략 시 전체 기간을 n등분하여 분할 매수"
+    help="Buy & Hold 전략 시 n개월 동안 매월 첫 거래일에 분할 매수 (Dollar Cost Averaging)"
 )
 
 if buy_hold_splits > 1:
-    st.sidebar.info(f"💡 전체 기간을 {buy_hold_splits}등분하여 각 시점에 균등 매수합니다.")
+    st.sidebar.info(f"💡 {buy_hold_splits}개월 동안 매월 첫 거래일에 균등 매수합니다.")
 
 # Buy & Hold 위험 관리 적용
 buy_hold_use_risk_mgmt = st.sidebar.checkbox(
@@ -587,7 +587,7 @@ if 'backtest_results' in st.session_state:
                 f"{backtest_results['total_return_pct']:.2f}%",
                 f"{backtest_results['cagr']:.2f}%"
             ],
-            f"Buy & Hold ({backtest_results['buy_hold_n_splits']}분할)": [
+            f"Buy & Hold ({backtest_results['buy_hold_n_splits']}개월)": [
                 f"${backtest_results['initial_capital']:,.2f}",
                 f"${backtest_results['buy_hold_final_value']:,.2f}",
                 f"{backtest_results['buy_hold_return_pct']:.2f}%",
@@ -611,7 +611,7 @@ if 'backtest_results' in st.session_state:
                 f"{backtest_results['sortino_ratio']:.2f}",
                 f"{backtest_results['calmar_ratio']:.2f}"
             ],
-            f"Buy & Hold ({backtest_results['buy_hold_n_splits']}분할)": [
+            f"Buy & Hold ({backtest_results['buy_hold_n_splits']}개월)": [
                 f"{backtest_results['buy_hold_sharpe']:.2f}",
                 "N/A",
                 f"{backtest_results['buy_hold_calmar']:.2f}"
@@ -631,7 +631,7 @@ if 'backtest_results' in st.session_state:
                 f"{backtest_results['max_drawdown_pct']:.2f}%",
                 f"{backtest_results['volatility']:.2f}%"
             ],
-            f"Buy & Hold ({backtest_results['buy_hold_n_splits']}분할)": [
+            f"Buy & Hold ({backtest_results['buy_hold_n_splits']}개월)": [
                 f"{backtest_results['buy_hold_mdd']:.2f}%",
                 f"{backtest_results['buy_hold_volatility']:.2f}%"
             ]
@@ -707,9 +707,9 @@ if 'backtest_results' in st.session_state:
 
         st.markdown("---")
 
-        # 분할 매수 상세 정보 (2분할 이상일 때만)
+        # 분할 매수 상세 정보 (2개월 이상일 때만)
         if backtest_results['buy_hold_n_splits'] > 1:
-            with st.expander(f"📅 {backtest_results['buy_hold_n_splits']}회 분할 매수 상세 내역"):
+            with st.expander(f"📅 {backtest_results['buy_hold_n_splits']}개월 DCA 매수 상세 내역"):
                 buy_points_df = pd.DataFrame(backtest_results['buy_hold_buy_points'])
                 buy_points_df['date'] = pd.to_datetime(buy_points_df['date'])
 
