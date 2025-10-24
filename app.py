@@ -15,13 +15,20 @@ from backtest import Backtester
 
 # 데이터 가져오기 함수 (캐싱 적용)
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_stock_data(ticker: str, period: str):
-    """주가 데이터 가져오기 (1시간 캐시)"""
+def fetch_stock_data(ticker: str, period: str, extra_days: int = 0):
+    """
+    주가 데이터 가져오기 (1시간 캐시)
+
+    Args:
+        ticker: 종목 티커
+        period: 백테스트 기간
+        extra_days: 표준편차 계산을 위한 추가 거래일 수
+    """
     max_retries = 3
     for attempt in range(max_retries):
         try:
             fetcher = DataFetcher(ticker)
-            data = fetcher.get_historical_data(period=period)
+            data = fetcher.get_historical_data(period=period, extra_days=extra_days)
             info = fetcher.get_info()
             return data, info
         except Exception as e:
@@ -185,13 +192,16 @@ if st.sidebar.button("🔄 분석 시작", type="primary"):
     try:
         with st.spinner(f"{ticker} 데이터를 가져오는 중..."):
             # 캐싱된 함수로 데이터 가져오기
-            data, info = fetch_stock_data(ticker, period)
+            # 표준편차 계산용으로 lookback 기간만큼 추가 데이터 요청
+            data, info = fetch_stock_data(ticker, period, extra_days=lookback)
 
-            if len(data) < lookback:
-                st.error(f"데이터가 충분하지 않습니다. 최소 {lookback}일의 데이터가 필요합니다.")
+            # 표준편차 계산용 + 백테스트용 최소 데이터 확인
+            min_required = lookback + 100  # lookback + 최소 100일의 백테스트 기간
+            if len(data) < min_required:
+                st.error(f"데이터가 충분하지 않습니다. 최소 {min_required}일의 데이터가 필요합니다 (현재: {len(data)}일).")
                 st.stop()
 
-            st.success(f"✅ {info['name']} 데이터 로드 완료!")
+            st.success(f"✅ {info['name']} 데이터 로드 완료! (총 {len(data)}일)")
 
             # 전략 적용
             with st.spinner("전략 계산 중..."):

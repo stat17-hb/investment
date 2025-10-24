@@ -21,23 +21,56 @@ class DataFetcher:
         })
         self.stock.session = session
 
-    def get_historical_data(self, period: str = "2y") -> pd.DataFrame:
+    def get_historical_data(self, period: str = "2y", extra_days: int = 0) -> pd.DataFrame:
         """
         과거 주가 데이터 가져오기
 
         Args:
             period: 기간 (1y, 2y, 5y, max 등)
+            extra_days: 추가로 가져올 거래일 수 (표준편차 계산용 등)
 
         Returns:
             DataFrame with OHLCV data
         """
         try:
-            df = self.stock.history(period=period)
+            # extra_days가 있으면 start/end date를 직접 계산
+            if extra_days > 0:
+                from datetime import datetime, timedelta
+
+                # period를 일수로 변환
+                period_days = self._period_to_days(period)
+
+                # 총 필요 일수 (주말 포함하여 1.5배로 계산)
+                total_days = int((period_days + extra_days) * 1.5)
+
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=total_days)
+
+                df = self.stock.history(start=start_date, end=end_date)
+            else:
+                df = self.stock.history(period=period)
+
             if df.empty:
                 raise ValueError(f"No data found for ticker {self.ticker}")
             return df
         except Exception as e:
             raise Exception(f"Error fetching data for {self.ticker}: {str(e)}")
+
+    def _period_to_days(self, period: str) -> int:
+        """period 문자열을 거래일수로 변환"""
+        period = period.lower()
+        if period.endswith('y'):
+            years = int(period[:-1])
+            return years * 252  # 1년 = 252 거래일
+        elif period.endswith('mo'):
+            months = int(period[:-2])
+            return months * 21  # 1개월 = 21 거래일
+        elif period.endswith('d'):
+            return int(period[:-1])
+        elif period == 'max':
+            return 252 * 20  # 20년으로 가정
+        else:
+            return 252 * 2  # 기본값 2년
 
     def get_current_price(self) -> float:
         """현재가 가져오기"""

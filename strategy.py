@@ -81,6 +81,11 @@ class StandardDeviationStrategy:
         # 매수 시그널 생성
         self.generate_signals()
 
+        # 표준편차 계산이 완료된 유효한 데이터만 필터링
+        # lookback_period 동안은 표준편차가 NaN이므로 제외
+        # 이렇게 하면 Buy & Hold와 동일한 시작 시점에서 백테스트 가능
+        self.data = self.data.dropna(subset=['Std_Dev', 'Daily_Std_Dev', 'MA_20', 'RSI'])
+
     def generate_signals(self):
         """매수/매도 시그널 생성"""
         self.data['Signal'] = 0  # 0: 관망, 1: 1σ 매수, 2: 2σ 매수
