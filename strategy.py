@@ -52,10 +52,13 @@ class StandardDeviationStrategy:
         # 일일 수익률 계산
         self.data['Returns'] = self.data['Close'].pct_change()
 
-        # 롤링 표준편차 계산 (1년 기준)
+        # 롤링 표준편차 계산 (1년 기준 = 연간 표준편차)
         self.data['Std_Dev'] = self.data['Returns'].rolling(
             window=self.lookback_period
         ).std()
+
+        # 일일 표준편차 계산 (연간 표준편차 / sqrt(252))
+        self.data['Daily_Std_Dev'] = self.data['Std_Dev'] / np.sqrt(252)
 
         # 표준편차를 가격으로 환산 (현재가 * 표준편차)
         self.data['Std_Dev_Price'] = self.data['Close'] * self.data['Std_Dev']
@@ -85,14 +88,16 @@ class StandardDeviationStrategy:
         # 전일 대비 하락폭 계산
         self.data['Price_Change_Pct'] = self.data['Returns'] * 100
 
-        # 1σ 매수 시그널: 전일 종가 대비 1표준편차 이상 하락
+        # 1σ 매수 시그널: 일일 수익률이 -1 일일표준편차 이하
+        # 예: 일일 표준편차가 3%라면, 하루에 -3% 이상 하락 시 매수
         condition_1sigma = (
-            (self.data['Price_Change_Pct'] <= -self.data['Std_Dev'] * 100)
+            (self.data['Returns'] <= -self.data['Daily_Std_Dev'])
         )
 
-        # 2σ 매수 시그널: 전일 종가 대비 2표준편차 이상 하락
+        # 2σ 매수 시그널: 일일 수익률이 -2 일일표준편차 이하
+        # 예: 일일 표준편차가 3%라면, 하루에 -6% 이상 하락 시 매수
         condition_2sigma = (
-            (self.data['Price_Change_Pct'] <= -2 * self.data['Std_Dev'] * 100)
+            (self.data['Returns'] <= -2 * self.data['Daily_Std_Dev'])
         )
 
         self.data.loc[condition_1sigma, 'Signal'] = 1
