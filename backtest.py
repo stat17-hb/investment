@@ -348,16 +348,6 @@ class Backtester:
         """
         n_months = self.buy_hold_splits
 
-        # 각 분할 시 투입할 금액
-        capital_per_month = self.initial_capital / n_months
-
-        # 포트폴리오 상태
-        cash_remaining = self.initial_capital
-        holdings = []  # [{'buy_price': price, 'shares': shares, 'buy_date': date, 'peak_price': price}]
-        portfolio_values = []
-        buy_points = []
-        trades = []  # 위험 관리로 인한 거래 기록
-
         # 매월 첫 거래일 찾기
         data_with_month = self.data.copy()
         data_with_month['year_month'] = data_with_month.index.to_period('M')
@@ -376,7 +366,18 @@ class Backtester:
 
         # 실제로 매수할 월 수 (데이터가 부족할 수 있음)
         actual_n_months = len(first_trading_days)
+
+        # 실제 매수 가능한 개월수로 분할 금액 재계산 (전액 투입 보장)
+        capital_per_month = self.initial_capital / actual_n_months
+
         buy_dates_set = set(first_trading_days)
+
+        # 포트폴리오 상태
+        cash_remaining = self.initial_capital
+        holdings = []  # [{'buy_price': price, 'shares': shares, 'buy_date': date, 'peak_price': price}]
+        portfolio_values = []
+        buy_points = []
+        trades = []  # 위험 관리로 인한 거래 기록
 
         # 매일 시뮬레이션
         months_bought = 0
