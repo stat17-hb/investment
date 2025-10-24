@@ -62,20 +62,6 @@ st.markdown("""
         --tv-red: #EF5350;
     }
 
-    /* 라이트 모드 색상 */
-    @media (prefers-color-scheme: light) {
-        :root {
-            --tv-bg-primary: #FFFFFF;
-            --tv-bg-secondary: #F8F9FA;
-            --tv-border: #E0E3E7;
-            --tv-text-primary: #1A1A1A;
-            --tv-text-secondary: #4A4A4A;
-            --tv-blue: #2962FF;
-            --tv-green: #26A69A;
-            --tv-red: #EF5350;
-        }
-    }
-
     /* 메인 배경 */
     .main {
         background-color: var(--tv-bg-primary);
@@ -140,16 +126,6 @@ st.markdown("""
         border-radius: 4px;
     }
 
-    @media (prefers-color-scheme: light) {
-        .stTextInput>div>div>input,
-        .stNumberInput>div>div>input,
-        .stSelectbox>div>div>select {
-            background-color: #FFFFFF;
-            color: var(--tv-text-primary);
-            border: 1px solid #D0D5DD;
-        }
-    }
-
     /* 슬라이더 */
     .stSlider>div>div>div>div {
         background-color: var(--tv-blue);
@@ -187,12 +163,6 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    @media (prefers-color-scheme: light) {
-        .dataframe th {
-            background-color: #E8EAED !important;
-        }
-    }
-
     .dataframe td {
         color: var(--tv-text-primary) !important;
     }
@@ -222,16 +192,6 @@ st.markdown("""
     /* 도움말 텍스트 */
     .stMarkdown small {
         color: var(--tv-text-secondary) !important;
-    }
-
-    /* 메트릭 카드 텍스트 - 라이트 모드 최적화 */
-    @media (prefers-color-scheme: light) {
-        .metric-card p {
-            color: var(--tv-text-primary) !important;
-        }
-        .metric-card .metric-label {
-            color: var(--tv-text-secondary) !important;
-        }
     }
 </style>
 """, unsafe_allow_html=True)
