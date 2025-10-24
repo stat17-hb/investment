@@ -41,20 +41,147 @@ def fetch_stock_data(ticker: str, period: str, extra_days: int = 0):
 
 # 페이지 설정
 st.set_page_config(
-    page_title="표준편차 매매법 대시보드",
-    page_icon="📈",
-    layout="wide"
+    page_title="표준편차 매매 백테스터",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-st.title("📈 표준편차 매매법 백테스트 대시보드")
+# TradingView 스타일 CSS
 st.markdown("""
-이 대시보드는 표준편차 매매법의 효과를 다양한 종목에서 테스트할 수 있습니다.
+<style>
+    /* TradingView 다크 테마 색상 */
+    :root {
+        --tv-bg-primary: #131722;
+        --tv-bg-secondary: #1E222D;
+        --tv-border: #2A2E39;
+        --tv-text-primary: #D1D4DC;
+        --tv-text-secondary: #787B86;
+        --tv-blue: #2962FF;
+        --tv-green: #26A69A;
+        --tv-red: #EF5350;
+    }
 
-**전략 핵심:**
-- 1년(252거래일) 기준 표준편차 계산
-- 가격이 1σ 또는 2σ 하락 시 매수
-- 목표 수익률 달성 또는 이동평균선 회귀 시 매도
-""")
+    /* 메인 배경 */
+    .main {
+        background-color: var(--tv-bg-primary);
+    }
+
+    .stApp {
+        background-color: var(--tv-bg-primary);
+    }
+
+    /* 헤더 스타일 */
+    h1, h2, h3 {
+        color: var(--tv-text-primary) !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    p {
+        color: var(--tv-text-primary);
+    }
+
+    /* 메트릭 카드 */
+    .metric-card {
+        background: var(--tv-bg-secondary);
+        border-radius: 8px;
+        padding: 20px;
+        border: 1px solid var(--tv-border);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    /* 사이드바 */
+    [data-testid="stSidebar"] {
+        background-color: var(--tv-bg-secondary);
+        border-right: 1px solid var(--tv-border);
+    }
+
+    [data-testid="stSidebar"] * {
+        color: var(--tv-text-primary) !important;
+    }
+
+    /* 버튼 */
+    .stButton>button {
+        background-color: var(--tv-blue);
+        color: white;
+        border-radius: 6px;
+        border: none;
+        padding: 12px 24px;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .stButton>button:hover {
+        background-color: #1E53E5;
+        box-shadow: 0 4px 12px rgba(41, 98, 255, 0.4);
+    }
+
+    /* 입력 필드 */
+    .stTextInput>div>div>input,
+    .stNumberInput>div>div>input,
+    .stSelectbox>div>div>select {
+        background-color: #2A2E39;
+        color: var(--tv-text-primary);
+        border: 1px solid #434651;
+        border-radius: 4px;
+    }
+
+    /* 슬라이더 */
+    .stSlider>div>div>div>div {
+        background-color: var(--tv-blue);
+    }
+
+    /* 탭 */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: var(--tv-bg-secondary);
+        border-radius: 8px 8px 0 0;
+        gap: 2px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background-color: transparent;
+        color: var(--tv-text-secondary);
+        border-radius: 8px 8px 0 0;
+        padding: 10px 20px;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background-color: var(--tv-bg-primary);
+        color: var(--tv-blue);
+    }
+
+    /* 테이블 */
+    .dataframe {
+        background-color: var(--tv-bg-secondary) !important;
+        border: 1px solid var(--tv-border) !important;
+    }
+
+    /* 성공/경고/정보 메시지 */
+    .stSuccess, .stWarning, .stInfo {
+        background-color: var(--tv-bg-secondary);
+        border: 1px solid var(--tv-border);
+        color: var(--tv-text-primary);
+    }
+
+    /* 체크박스 */
+    .stCheckbox>label {
+        color: var(--tv-text-primary);
+    }
+
+    /* 라디오 버튼 */
+    .stRadio>label {
+        color: var(--tv-text-primary);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# 헤더
+st.markdown("""
+<div style='text-align: center; padding: 20px 0;'>
+    <h1 style='color: #D1D4DC; margin-bottom: 5px;'>📊 표준편차 매매 백테스터</h1>
+    <p style='color: #787B86; font-size: 16px;'>Statistical Trading Strategy Analyzer</p>
+</div>
+""", unsafe_allow_html=True)
 
 # 사이드바 설정
 st.sidebar.header("⚙️ 설정")
@@ -453,50 +580,78 @@ if 'backtest_results' in st.session_state:
                 for reason, count in sell_reasons.items():
                     st.write(f"- {reason}: {count}회")
 
-        # 포트폴리오 가치 변화 차트
+        # 포트폴리오 가치 변화 차트 (TradingView 스타일)
         st.subheader("📈 포트폴리오 가치 변화")
         portfolio_df = backtest_results['portfolio_df']
 
-        fig = go.Figure()
+        fig_portfolio = go.Figure()
 
-        # 표준편차 매매법 라인
-        fig.add_trace(go.Scatter(
+        # 표준편차 매매법 (면적 차트)
+        fig_portfolio.add_trace(go.Scatter(
             x=portfolio_df['date'],
             y=portfolio_df['total_value'],
             mode='lines',
             name='표준편차 매매법',
-            line=dict(color='#00cc96', width=2)
+            line=dict(color='#2962FF', width=3),
+            fill='tozeroy',
+            fillcolor='rgba(41, 98, 255, 0.1)'
         ))
 
-        # Buy & Hold 라인
-        fig.add_trace(go.Scatter(
+        # Buy & Hold
+        fig_portfolio.add_trace(go.Scatter(
             x=portfolio_df['date'],
             y=backtest_results['buy_hold_portfolio_values'],
             mode='lines',
             name='Buy & Hold',
-            line=dict(color='#636EFA', width=2, dash='dash')
+            line=dict(color='#787B86', width=2, dash='dash')
         ))
 
         # 초기 자본 기준선
-        fig.add_hline(
+        fig_portfolio.add_hline(
             y=initial_capital,
             line_dash="dot",
-            line_color="gray",
-            annotation_text="초기 자본"
+            line_color="#2A2E39",
+            annotation_text="초기 자본",
+            annotation_position="right"
         )
 
-        fig.update_layout(
-            yaxis_title="가치 ($)",
-            height=500,
+        # TradingView 스타일 적용
+        fig_portfolio.update_layout(
+            template='plotly_dark',
+            paper_bgcolor='#131722',
+            plot_bgcolor='#1E222D',
+            font=dict(
+                family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
+                color='#D1D4DC'
+            ),
+            xaxis=dict(
+                gridcolor='#2A2E39',
+                showgrid=True,
+                zeroline=False
+            ),
+            yaxis=dict(
+                gridcolor='#2A2E39',
+                showgrid=True,
+                zeroline=False,
+                side='right',
+                tickprefix='$'
+            ),
             hovermode='x unified',
             legend=dict(
-                yanchor="top",
-                y=0.99,
-                xanchor="left",
-                x=0.01
-            )
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                bgcolor='rgba(30, 34, 45, 0.8)',
+                bordercolor='#2A2E39',
+                borderwidth=1
+            ),
+            height=500,
+            margin=dict(l=0, r=80, t=40, b=0)
         )
-        st.plotly_chart(fig, use_container_width=True)
+
+        st.plotly_chart(fig_portfolio, use_container_width=True, config={'displayModeBar': False})
 
     # 탭 3: 차트
     with tab3:
@@ -518,23 +673,40 @@ if 'backtest_results' in st.session_state:
         elif chart_period == "최근 1개월":
             chart_data = chart_data.tail(21)
 
-        # 서브플롯 생성
+        # TradingView 스타일 서브플롯 생성
         fig = make_subplots(
-            rows=3, cols=1,
+            rows=2, cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.05,
-            row_heights=[0.5, 0.25, 0.25],
-            subplot_titles=('가격 & 표준편차 밴드', 'RSI', '매수 시그널')
+            vertical_spacing=0.03,
+            row_heights=[0.7, 0.3],
+            subplot_titles=('', '')
         )
 
-        # 가격 & 밴드
+        # 캔들스틱 차트 (TradingView 스타일)
+        fig.add_trace(
+            go.Candlestick(
+                x=chart_data.index,
+                open=chart_data['Open'],
+                high=chart_data['High'],
+                low=chart_data['Low'],
+                close=chart_data['Close'],
+                increasing_line_color='#26A69A',  # TradingView 상승
+                decreasing_line_color='#EF5350',  # TradingView 하락
+                increasing_fillcolor='#26A69A',
+                decreasing_fillcolor='#EF5350',
+                name='가격'
+            ),
+            row=1, col=1
+        )
+
+        # 표준편차 밴드 (상단)
         fig.add_trace(
             go.Scatter(
                 x=chart_data.index,
                 y=chart_data['Sell_2Sigma'],
                 mode='lines',
                 name='+2σ',
-                line=dict(color='rgba(255, 0, 0, 0.3)', dash='dash'),
+                line=dict(color='rgba(239, 83, 80, 0.3)', width=1, dash='dot'),
                 showlegend=True
             ),
             row=1, col=1
@@ -546,43 +718,20 @@ if 'backtest_results' in st.session_state:
                 y=chart_data['Sell_1Sigma'],
                 mode='lines',
                 name='+1σ',
-                line=dict(color='rgba(255, 100, 0, 0.3)', dash='dash'),
+                line=dict(color='rgba(239, 83, 80, 0.5)', width=1, dash='dash'),
                 showlegend=True
             ),
             row=1, col=1
         )
 
-        fig.add_trace(
-            go.Scatter(
-                x=chart_data.index,
-                y=chart_data['MA_20'],
-                mode='lines',
-                name='MA20',
-                line=dict(color='blue', width=1),
-                showlegend=True
-            ),
-            row=1, col=1
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=chart_data.index,
-                y=chart_data['Close'],
-                mode='lines',
-                name='종가',
-                line=dict(color='black', width=2),
-                showlegend=True
-            ),
-            row=1, col=1
-        )
-
+        # 표준편차 밴드 (하단)
         fig.add_trace(
             go.Scatter(
                 x=chart_data.index,
                 y=chart_data['Buy_1Sigma'],
                 mode='lines',
                 name='-1σ',
-                line=dict(color='rgba(0, 200, 0, 0.3)', dash='dash'),
+                line=dict(color='rgba(41, 98, 255, 0.5)', width=2),
                 showlegend=True
             ),
             row=1, col=1
@@ -594,79 +743,140 @@ if 'backtest_results' in st.session_state:
                 y=chart_data['Buy_2Sigma'],
                 mode='lines',
                 name='-2σ',
-                line=dict(color='rgba(0, 255, 0, 0.3)', dash='dash'),
+                line=dict(color='rgba(41, 98, 255, 0.3)', width=1, dash='dash'),
+                fill='tonexty',
+                fillcolor='rgba(41, 98, 255, 0.05)',
                 showlegend=True
             ),
             row=1, col=1
         )
 
-        # 매수 시그널 표시
+        # 이동평균선
+        fig.add_trace(
+            go.Scatter(
+                x=chart_data.index,
+                y=chart_data['MA_20'],
+                mode='lines',
+                name='MA20',
+                line=dict(color='#FFA726', width=1.5),
+                showlegend=True
+            ),
+            row=1, col=1
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=chart_data.index,
+                y=chart_data['MA_60'],
+                mode='lines',
+                name='MA60',
+                line=dict(color='#AB47BC', width=1.5),
+                showlegend=True
+            ),
+            row=1, col=1
+        )
+
+        # 매수 시그널 마커
         buy_signals = chart_data[chart_data['Signal'] > 0]
         if not buy_signals.empty:
             fig.add_trace(
                 go.Scatter(
                     x=buy_signals.index,
-                    y=buy_signals['Close'],
+                    y=buy_signals['Low'] * 0.98,  # 캔들 아래에 표시
                     mode='markers',
                     name='매수 시그널',
                     marker=dict(
-                        color=['green' if s == 1 else 'blue' for s in buy_signals['Signal']],
-                        size=10,
-                        symbol='triangle-up'
+                        symbol='triangle-up',
+                        size=12,
+                        color=['#26A69A' if s == 1 else '#2962FF' for s in buy_signals['Signal']],
+                        line=dict(color='white', width=1)
                     ),
                     showlegend=True
                 ),
                 row=1, col=1
             )
 
-        # RSI
+        # RSI 차트 (하단)
         fig.add_trace(
             go.Scatter(
                 x=chart_data.index,
                 y=chart_data['RSI'],
                 mode='lines',
                 name='RSI',
-                line=dict(color='purple', width=2),
+                line=dict(color='#2962FF', width=2),
+                fill='tozeroy',
+                fillcolor='rgba(41, 98, 255, 0.1)',
                 showlegend=False
             ),
             row=2, col=1
         )
 
-        fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
-        fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
-
-        # 시그널 바
-        fig.add_trace(
-            go.Bar(
-                x=chart_data.index,
-                y=chart_data['Signal'],
-                name='시그널',
-                marker_color=['green' if s == 1 else 'blue' if s == 2 else 'gray'
-                              for s in chart_data['Signal']],
-                showlegend=False
-            ),
-            row=3, col=1
+        # RSI 과매수/과매도 라인
+        fig.add_hline(
+            y=70,
+            line_dash="dash",
+            line_color="rgba(239, 83, 80, 0.5)",
+            row=2, col=1,
+            annotation_text="과매수",
+            annotation_position="right"
+        )
+        fig.add_hline(
+            y=30,
+            line_dash="dash",
+            line_color="rgba(38, 166, 154, 0.5)",
+            row=2, col=1,
+            annotation_text="과매도",
+            annotation_position="right"
         )
 
-        # 레이아웃 업데이트
-        fig.update_xaxes(title_text="날짜", row=3, col=1)
-        fig.update_yaxes(title_text="가격 ($)", row=1, col=1)
-        fig.update_yaxes(title_text="RSI", row=2, col=1)
-        fig.update_yaxes(title_text="시그널", row=3, col=1)
-
+        # TradingView 스타일 레이아웃
         fig.update_layout(
-            height=900,
+            template='plotly_dark',
+            paper_bgcolor='#131722',
+            plot_bgcolor='#1E222D',
+            font=dict(
+                family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
+                color='#D1D4DC',
+                size=12
+            ),
+            xaxis=dict(
+                gridcolor='#2A2E39',
+                showgrid=True,
+                zeroline=False,
+                rangeslider_visible=False
+            ),
+            yaxis=dict(
+                gridcolor='#2A2E39',
+                showgrid=True,
+                zeroline=False,
+                side='right'  # TradingView처럼 오른쪽에 y축
+            ),
+            xaxis2=dict(
+                gridcolor='#2A2E39',
+                showgrid=True
+            ),
+            yaxis2=dict(
+                gridcolor='#2A2E39',
+                showgrid=True,
+                side='right',
+                range=[0, 100]
+            ),
             hovermode='x unified',
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
                 y=1.02,
                 xanchor="right",
-                x=1
-            )
+                x=1,
+                bgcolor='rgba(30, 34, 45, 0.8)',
+                bordercolor='#2A2E39',
+                borderwidth=1
+            ),
+            margin=dict(l=0, r=80, t=40, b=0),
+            height=800
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
 
     # 탭 4: 거래 내역
     with tab4:
