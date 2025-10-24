@@ -653,11 +653,12 @@ if 'backtest_results' in st.session_state:
 
         st.dataframe(risk_df, use_container_width=True, hide_index=True)
 
-        # 섹션 4: 거래 지표 (표준편차 매매법만)
+        # 섹션 4: 거래 지표
         st.subheader("💼 거래 지표")
         trading_df = pd.DataFrame({
             '지표': [
-                '총 거래 횟수',
+                '총 매수 횟수',
+                '총 매도 횟수',
                 '승률',
                 '손익비 (Profit Factor)',
                 '평균 보유 기간',
@@ -665,12 +666,22 @@ if 'backtest_results' in st.session_state:
                 '평균 손실 거래'
             ],
             '표준편차 매매법': [
-                f"{backtest_results['total_trades']}회",
+                f"{backtest_results['buy_count']}회",
+                f"{backtest_results['sell_count']}회",
                 f"{backtest_results['win_rate']:.1f}%",
                 f"{backtest_results['profit_factor']:.2f}",
                 f"{backtest_results['avg_holding_days']:.1f}일",
                 f"{backtest_results['avg_win_pct']:.2f}%",
                 f"{backtest_results['avg_loss_pct']:.2f}%"
+            ],
+            f"Buy & Hold ({backtest_results['buy_hold_n_splits']}개월)": [
+                f"{backtest_results['buy_hold_buy_count']}회",
+                f"{backtest_results['buy_hold_sell_count']}회" if backtest_results['buy_hold_sell_count'] > 0 else "N/A",
+                "N/A",
+                "N/A",
+                "N/A",
+                "N/A",
+                "N/A"
             ]
         })
 
@@ -692,8 +703,12 @@ if 'backtest_results' in st.session_state:
             - **변동성**: 수익률의 표준편차 (연율화). 가격 변동의 크기를 측정합니다.
 
             ### 거래 지표
+            - **총 매수 횟수**: 매수한 총 횟수입니다.
+            - **총 매도 횟수**: 매도한 총 횟수입니다. 승률은 매도 횟수 기준입니다.
             - **손익비 (Profit Factor)**: 총 이익 / 총 손실. 1보다 커야 수익 전략입니다.
             - **승률**: 전체 거래 중 수익을 낸 거래의 비율입니다.
+
+            💡 **총 매수 금액 vs 초기 자본**: 총 매수 금액은 재투자를 포함한 누적 금액이므로 초기 자본보다 클 수 있습니다.
             """)
 
         st.markdown("---")
