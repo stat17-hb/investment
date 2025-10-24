@@ -327,11 +327,22 @@ trailing_stop_pct = st.sidebar.slider(
 st.sidebar.markdown("---")
 st.sidebar.subheader("Buy & Hold 설정")
 
+# 데이터 기간에 따른 개월수 계산
+period_months = {
+    "1y": 12,
+    "2y": 24,
+    "3y": 36,
+    "5y": 60
+}
+default_months = period_months.get(period, 12)
+
 # Buy & Hold 분할 매수
-buy_hold_splits = st.sidebar.selectbox(
+buy_hold_splits = st.sidebar.number_input(
     "분할 매수 기간 (개월)",
-    options=[1, 3, 6, 12, 24],
-    index=0,
+    min_value=1,
+    max_value=120,
+    value=default_months,
+    step=1,
     help="Buy & Hold 전략 시 n개월 동안 매월 첫 거래일에 분할 매수 (Dollar Cost Averaging)"
 )
 
