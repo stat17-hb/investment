@@ -55,8 +55,8 @@ st.markdown("""
         --tv-bg-primary: #131722;
         --tv-bg-secondary: #1E222D;
         --tv-border: #363A45;
-        --tv-text-primary: #E1E3E6;
-        --tv-text-secondary: #B2B5BE;
+        --tv-text-primary: #FFFFFF;
+        --tv-text-secondary: #E8E8E8;
         --tv-blue: #2962FF;
         --tv-green: #26A69A;
         --tv-red: #EF5350;
@@ -199,8 +199,8 @@ st.markdown("""
 # 헤더
 st.markdown("""
 <div style='text-align: center; padding: 20px 0;'>
-    <h1 style='color: #E1E3E6; margin-bottom: 5px;'>📊 표준편차 매매 백테스터</h1>
-    <p style='color: #B2B5BE; font-size: 16px;'>Statistical Trading Strategy Analyzer</p>
+    <h1 style='color: #FFFFFF; margin-bottom: 5px;'>📊 표준편차 매매 백테스터</h1>
+    <p style='color: #E8E8E8; font-size: 16px;'>Statistical Trading Strategy Analyzer</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -446,8 +446,8 @@ if 'backtest_results' in st.session_state:
             color = "#26A69A" if price_change > 0 else "#EF5350"
             st.markdown(f"""
             <div class='metric-card'>
-                <p style='color: #B2B5BE; margin: 0; font-size: 14px;'>현재 가격</p>
-                <p style='color: #E1E3E6; font-size: 36px; font-weight: 700; margin: 10px 0;'>
+                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>현재 가격</p>
+                <p style='color: #FFFFFF; font-size: 36px; font-weight: 700; margin: 10px 0;'>
                     ${current_stats['current_price']:.2f}
                 </p>
                 <p style='color: {color}; margin: 0; font-size: 16px;'>
@@ -459,11 +459,11 @@ if 'backtest_results' in st.session_state:
         with col2:
             st.markdown(f"""
             <div class='metric-card'>
-                <p style='color: #B2B5BE; margin: 0; font-size: 14px;'>1σ 매수 가격</p>
+                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>1σ 매수 가격</p>
                 <p style='color: #2962FF; font-size: 36px; font-weight: 700; margin: 10px 0;'>
                     ${current_stats['buy_1sigma_price']:.2f}
                 </p>
-                <p style='color: #B2B5BE; margin: 0; font-size: 16px;'>
+                <p style='color: #E8E8E8; margin: 0; font-size: 16px;'>
                     현재가 대비 {((current_stats['buy_1sigma_price'] - current_stats['current_price']) / current_stats['current_price'] * 100):.1f}%
                 </p>
             </div>
@@ -472,11 +472,11 @@ if 'backtest_results' in st.session_state:
         with col3:
             st.markdown(f"""
             <div class='metric-card'>
-                <p style='color: #B2B5BE; margin: 0; font-size: 14px;'>2σ 매수 가격</p>
+                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>2σ 매수 가격</p>
                 <p style='color: #EF5350; font-size: 36px; font-weight: 700; margin: 10px 0;'>
                     ${current_stats['buy_2sigma_price']:.2f}
                 </p>
-                <p style='color: #B2B5BE; margin: 0; font-size: 16px;'>
+                <p style='color: #E8E8E8; margin: 0; font-size: 16px;'>
                     현재가 대비 {((current_stats['buy_2sigma_price'] - current_stats['current_price']) / current_stats['current_price'] * 100):.1f}%
                 </p>
             </div>
@@ -490,7 +490,7 @@ if 'backtest_results' in st.session_state:
         with col1:
             st.markdown(f"""
             <div class='metric-card' style='text-align: center;'>
-                <p style='color: #B2B5BE; margin: 0; font-size: 14px;'>표준편차</p>
+                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>표준편차</p>
                 <p style='color: #2962FF; font-size: 28px; font-weight: 700; margin: 10px 0;'>
                     {current_stats['std_dev_pct']:.2f}%
                 </p>
@@ -500,7 +500,7 @@ if 'backtest_results' in st.session_state:
         with col2:
             st.markdown(f"""
             <div class='metric-card' style='text-align: center;'>
-                <p style='color: #B2B5BE; margin: 0; font-size: 14px;'>RSI</p>
+                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>RSI</p>
                 <p style='color: #2962FF; font-size: 28px; font-weight: 700; margin: 10px 0;'>
                     {current_stats['rsi']:.1f}
                 </p>
@@ -510,7 +510,7 @@ if 'backtest_results' in st.session_state:
         with col3:
             st.markdown(f"""
             <div class='metric-card' style='text-align: center;'>
-                <p style='color: #B2B5BE; margin: 0; font-size: 14px;'>MA20</p>
+                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>MA20</p>
                 <p style='color: #FFA726; font-size: 28px; font-weight: 700; margin: 10px 0;'>
                     ${current_stats['ma_20']:.2f}
                 </p>
@@ -519,11 +519,11 @@ if 'backtest_results' in st.session_state:
 
         with col4:
             signal_text = {0: "관망", 1: "1σ 매수", 2: "2σ 매수"}
-            signal_color_map = {0: "#B2B5BE", 1: "#26A69A", 2: "#2962FF"}
+            signal_color_map = {0: "#E8E8E8", 1: "#26A69A", 2: "#2962FF"}
             signal_val = int(current_stats['signal'])
             st.markdown(f"""
             <div class='metric-card' style='text-align: center;'>
-                <p style='color: #B2B5BE; margin: 0; font-size: 14px;'>현재 시그널</p>
+                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>현재 시그널</p>
                 <p style='color: {signal_color_map[signal_val]}; font-size: 24px; font-weight: 700; margin: 10px 0;'>
                     {signal_text[signal_val]}
                 </p>
@@ -694,7 +694,7 @@ if 'backtest_results' in st.session_state:
             y=backtest_results['buy_hold_portfolio_values'],
             mode='lines',
             name='Buy & Hold',
-            line=dict(color='#787B86', width=2, dash='dash')
+            line=dict(color='#E8E8E8', width=2, dash='dash')
         ))
 
         # 초기 자본 기준선
@@ -713,7 +713,7 @@ if 'backtest_results' in st.session_state:
             plot_bgcolor='#1E222D',
             font=dict(
                 family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
-                color='#D1D4DC'
+                color='#FFFFFF'
             ),
             xaxis=dict(
                 gridcolor='#2A2E39',
@@ -927,7 +927,7 @@ if 'backtest_results' in st.session_state:
             plot_bgcolor='#1E222D',
             font=dict(
                 family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
-                color='#D1D4DC',
+                color='#FFFFFF',
                 size=12
             ),
             xaxis=dict(
