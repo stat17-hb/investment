@@ -414,32 +414,102 @@ if 'backtest_results' in st.session_state:
 
     # 탭 1: 현재 분석
     with tab1:
-        st.header(f"{ticker} - {info['name']}")
+        st.markdown(f"## {ticker} - {info['name']}")
+        st.markdown("<br>", unsafe_allow_html=True)
 
+        # 메트릭 카드 (3단 그리드)
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            price_change = ((current_stats['current_price'] - current_stats['ma_20']) / current_stats['ma_20']) * 100
+            color = "#26A69A" if price_change > 0 else "#EF5350"
+            st.markdown(f"""
+            <div class='metric-card'>
+                <p style='color: #787B86; margin: 0; font-size: 14px;'>현재 가격</p>
+                <p style='color: #D1D4DC; font-size: 36px; font-weight: 700; margin: 10px 0;'>
+                    ${current_stats['current_price']:.2f}
+                </p>
+                <p style='color: {color}; margin: 0; font-size: 16px;'>
+                    MA20 대비 {price_change:+.2f}%
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown(f"""
+            <div class='metric-card'>
+                <p style='color: #787B86; margin: 0; font-size: 14px;'>1σ 매수 가격</p>
+                <p style='color: #2962FF; font-size: 36px; font-weight: 700; margin: 10px 0;'>
+                    ${current_stats['buy_1sigma_price']:.2f}
+                </p>
+                <p style='color: #787B86; margin: 0; font-size: 16px;'>
+                    현재가 대비 {((current_stats['buy_1sigma_price'] - current_stats['current_price']) / current_stats['current_price'] * 100):.1f}%
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col3:
+            st.markdown(f"""
+            <div class='metric-card'>
+                <p style='color: #787B86; margin: 0; font-size: 14px;'>2σ 매수 가격</p>
+                <p style='color: #EF5350; font-size: 36px; font-weight: 700; margin: 10px 0;'>
+                    ${current_stats['buy_2sigma_price']:.2f}
+                </p>
+                <p style='color: #787B86; margin: 0; font-size: 16px;'>
+                    현재가 대비 {((current_stats['buy_2sigma_price'] - current_stats['current_price']) / current_stats['current_price'] * 100):.1f}%
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # 추가 지표 (4단 그리드)
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            st.metric("현재가", f"${current_stats['current_price']:.2f}")
-            st.metric("20일 이동평균", f"${current_stats['ma_20']:.2f}")
+            st.markdown(f"""
+            <div class='metric-card' style='text-align: center;'>
+                <p style='color: #787B86; margin: 0; font-size: 14px;'>표준편차</p>
+                <p style='color: #2962FF; font-size: 28px; font-weight: 700; margin: 10px 0;'>
+                    {current_stats['std_dev_pct']:.2f}%
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
         with col2:
-            st.metric("표준편차 (%)", f"{current_stats['std_dev_pct']:.2f}%")
-            st.metric("표준편차 (가격)", f"${current_stats['std_dev_price']:.2f}")
+            st.markdown(f"""
+            <div class='metric-card' style='text-align: center;'>
+                <p style='color: #787B86; margin: 0; font-size: 14px;'>RSI</p>
+                <p style='color: #2962FF; font-size: 28px; font-weight: 700; margin: 10px 0;'>
+                    {current_stats['rsi']:.1f}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
         with col3:
-            st.metric("1σ 매수가", f"${current_stats['buy_1sigma_price']:.2f}")
-            st.metric("2σ 매수가", f"${current_stats['buy_2sigma_price']:.2f}")
+            st.markdown(f"""
+            <div class='metric-card' style='text-align: center;'>
+                <p style='color: #787B86; margin: 0; font-size: 14px;'>MA20</p>
+                <p style='color: #FFA726; font-size: 28px; font-weight: 700; margin: 10px 0;'>
+                    ${current_stats['ma_20']:.2f}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
         with col4:
-            st.metric("RSI", f"{current_stats['rsi']:.1f}")
             signal_text = {0: "관망", 1: "1σ 매수", 2: "2σ 매수"}
-            signal_color = {0: "🟡", 1: "🟢", 2: "🔵"}
-            st.metric(
-                "현재 시그널",
-                f"{signal_color[int(current_stats['signal'])]} {signal_text[int(current_stats['signal'])]}"
-            )
+            signal_color_map = {0: "#787B86", 1: "#26A69A", 2: "#2962FF"}
+            signal_val = int(current_stats['signal'])
+            st.markdown(f"""
+            <div class='metric-card' style='text-align: center;'>
+                <p style='color: #787B86; margin: 0; font-size: 14px;'>현재 시그널</p>
+                <p style='color: {signal_color_map[signal_val]}; font-size: 24px; font-weight: 700; margin: 10px 0;'>
+                    {signal_text[signal_val]}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown("---")
+        st.markdown("<br>", unsafe_allow_html=True)
 
         # 통계 정보
         col1, col2 = st.columns(2)
