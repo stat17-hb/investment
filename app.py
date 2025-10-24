@@ -62,8 +62,8 @@ st.sidebar.header("⚙️ 설정")
 # 종목 입력
 ticker = st.sidebar.text_input(
     "종목 티커",
-    value="SOXL",
-    help="예: SOXL, TQQQ, SPY, NVDA 등"
+    value="QLD",
+    help="예: QLD, SOXL, TQQQ, SPY, NVDA 등"
 ).upper()
 
 # 데이터 기간
@@ -736,7 +736,7 @@ else:
     with col1:
         st.subheader("🚀 빠른 시작")
         st.markdown("""
-        1. **종목 티커** 입력 (예: SOXL, TQQQ, SPY)
+        1. **종목 티커** 입력 (예: QLD, SOXL, TQQQ, SPY)
         2. **백테스트 설정** 조정 (기본값도 좋습니다)
         3. **분석 시작** 클릭
         4. **결과 확인** 및 CSV 다운로드
@@ -751,11 +751,17 @@ else:
     # 예시 종목
     st.subheader("💡 추천 종목")
     st.markdown("""
-    **레버리지 ETF:**
+    **3배 레버리지 ETF:**
     - `SOXL`: 반도체 3배 레버리지
     - `TQQQ`: 나스닥 3배 레버리지
     - `UPRO`: S&P500 3배 레버리지
     - `TMF`: 미국 채권 3배 레버리지
+
+    **2배 레버리지 ETF:**
+    - `QLD`: 나스닥 2배 레버리지
+    - `SSO`: S&P500 2배 레버리지
+    - `UWM`: 러셀2000 2배 레버리지
+    - `USD`: 반도체 2배 레버리지
 
     **일반 ETF:**
     - `SPY`: S&P500
