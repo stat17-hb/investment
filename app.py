@@ -329,67 +329,72 @@ if 'backtest_results' in st.session_state:
 
     # 탭 2: 백테스트 결과
     with tab2:
-        st.header("백테스트 성과")
+        st.header("📊 백테스트 성과 비교")
 
-        # 주요 지표
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            st.metric(
-                "총 수익률",
+        # 비교 테이블
+        buy_hold_stats = backtest_results.get('buy_hold_stats', {})
+        comparison_df = pd.DataFrame({
+            '지표': [
+                '초기 자본',
+                '최종 자산',
+                '총 수익률 (%)',
+                '최대 낙폭 (MDD %)',
+                '총 거래 횟수',
+                '승률 (%)',
+                '평균 수익률 (%)',
+                '평균 보유 기간 (일)',
+                '최대 수익 (%)',
+                '최대 손실 (%)',
+                '평균 수익 거래 (%)',
+                '평균 손실 거래 (%)'
+            ],
+            '표준편차 매매법': [
+                f"${backtest_results['initial_capital']:,.2f}",
+                f"${backtest_results['final_value']:,.2f}",
                 f"{backtest_results['total_return_pct']:.2f}%",
-                delta=f"{backtest_results['total_return_pct'] - backtest_results['buy_hold_return_pct']:.2f}% vs Buy&Hold"
-            )
-            st.metric("최종 자산", f"${backtest_results['final_value']:.2f}")
+                f"{backtest_results['max_drawdown_pct']:.2f}%",
+                f"{backtest_results['total_trades']}회",
+                f"{backtest_results['win_rate']:.1f}%",
+                f"{backtest_results['avg_profit_pct']:.2f}%",
+                f"{backtest_results['avg_holding_days']:.1f}일",
+                f"{backtest_results['max_profit_pct']:.2f}%",
+                f"{backtest_results['max_loss_pct']:.2f}%",
+                f"{backtest_results['avg_win_pct']:.2f}%",
+                f"{backtest_results['avg_loss_pct']:.2f}%"
+            ],
+            f"Buy & Hold ({backtest_results['buy_hold_n_splits']}분할)": [
+                f"${backtest_results['initial_capital']:,.2f}",
+                f"${backtest_results['buy_hold_final_value']:,.2f}",
+                f"{backtest_results['buy_hold_return_pct']:.2f}%",
+                f"{backtest_results['buy_hold_mdd']:.2f}%",
+                f"{len(buy_hold_stats.get('trades', []))}회" if buy_hold_stats.get('use_risk_mgmt') else "N/A",
+                "N/A",
+                "N/A",
+                "N/A",
+                "N/A",
+                "N/A",
+                "N/A",
+                "N/A"
+            ]
+        })
 
-        with col2:
-            st.metric("총 거래 횟수", f"{backtest_results['total_trades']}회")
-            st.metric("승률", f"{backtest_results['win_rate']:.1f}%")
+        # 테이블 표시
+        st.dataframe(
+            comparison_df,
+            use_container_width=True,
+            hide_index=True
+        )
 
-        with col3:
-            st.metric("평균 수익률", f"{backtest_results['avg_profit_pct']:.2f}%")
-            st.metric("평균 보유 기간", f"{backtest_results['avg_holding_days']:.1f}일")
-
-        with col4:
-            st.metric("최대 수익", f"{backtest_results['max_profit_pct']:.2f}%")
-            st.metric("최대 손실", f"{backtest_results['max_loss_pct']:.2f}%")
+        # 초과 수익률 강조
+        outperformance = backtest_results['total_return_pct'] - backtest_results['buy_hold_return_pct']
+        if outperformance > 0:
+            st.success(f"✅ 표준편차 매매법이 Buy & Hold 대비 **{outperformance:+.2f}%** 초과 수익")
+        elif outperformance < 0:
+            st.warning(f"⚠️ 표준편차 매매법이 Buy & Hold 대비 **{outperformance:.2f}%** 저조")
+        else:
+            st.info("ℹ️ 표준편차 매매법과 Buy & Hold의 수익률이 동일합니다")
 
         st.markdown("---")
-
-        # Buy & Hold 상세 정보
-        st.subheader(f"🆚 Buy & Hold 전략 비교 ({backtest_results['buy_hold_n_splits']}분할 매수)")
-
-        col1, col2, col3, col4, col5 = st.columns(5)
-
-        with col1:
-            st.metric(
-                "B&H 총 매수 주식",
-                f"{backtest_results['buy_hold_shares']:.4f}주"
-            )
-
-        with col2:
-            st.metric(
-                "B&H 평균 매수가",
-                f"${backtest_results['buy_hold_avg_buy_price']:.2f}"
-            )
-
-        with col3:
-            st.metric(
-                "B&H 최종 자산",
-                f"${backtest_results['buy_hold_final_value']:.2f}"
-            )
-
-        with col4:
-            st.metric(
-                "B&H 수익률",
-                f"{backtest_results['buy_hold_return_pct']:.2f}%"
-            )
-
-        with col5:
-            st.metric(
-                "B&H 최대 낙폭",
-                f"{backtest_results['buy_hold_mdd']:.2f}%"
-            )
 
         # 분할 매수 상세 정보 (2분할 이상일 때만)
         if backtest_results['buy_hold_n_splits'] > 1:
@@ -428,131 +433,50 @@ if 'backtest_results' in st.session_state:
                 for reason, count in sell_reasons.items():
                     st.write(f"- {reason}: {count}회")
 
-        st.markdown("---")
+        # 포트폴리오 가치 변화 차트
+        st.subheader("📈 포트폴리오 가치 변화")
+        portfolio_df = backtest_results['portfolio_df']
 
-        # 비교 차트
-        col1, col2 = st.columns(2)
+        fig = go.Figure()
 
-        with col1:
-            st.subheader("📊 수익률 비교")
-            comparison_data = pd.DataFrame({
-                '전략': ['표준편차 매매법', 'Buy & Hold'],
-                '수익률 (%)': [
-                    backtest_results['total_return_pct'],
-                    backtest_results['buy_hold_return_pct']
-                ],
-                '최종 자산': [
-                    backtest_results['final_value'],
-                    backtest_results['buy_hold_final_value']
-                ]
-            })
+        # 표준편차 매매법 라인
+        fig.add_trace(go.Scatter(
+            x=portfolio_df['date'],
+            y=portfolio_df['total_value'],
+            mode='lines',
+            name='표준편차 매매법',
+            line=dict(color='#00cc96', width=2)
+        ))
 
-            fig = go.Figure(data=[
-                go.Bar(
-                    x=comparison_data['전략'],
-                    y=comparison_data['수익률 (%)'],
-                    text=comparison_data['수익률 (%)'].apply(lambda x: f"{x:.2f}%"),
-                    textposition='auto',
-                    marker_color=['#00cc96' if x > 0 else '#ef553b'
-                                  for x in comparison_data['수익률 (%)']]
-                )
-            ])
-            fig.update_layout(
-                yaxis_title="수익률 (%)",
-                height=400,
-                showlegend=False
+        # Buy & Hold 라인
+        fig.add_trace(go.Scatter(
+            x=portfolio_df['date'],
+            y=backtest_results['buy_hold_portfolio_values'],
+            mode='lines',
+            name='Buy & Hold',
+            line=dict(color='#636EFA', width=2, dash='dash')
+        ))
+
+        # 초기 자본 기준선
+        fig.add_hline(
+            y=initial_capital,
+            line_dash="dot",
+            line_color="gray",
+            annotation_text="초기 자본"
+        )
+
+        fig.update_layout(
+            yaxis_title="가치 ($)",
+            height=500,
+            hovermode='x unified',
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01
             )
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            st.subheader("📈 포트폴리오 가치 변화")
-            portfolio_df = backtest_results['portfolio_df']
-
-            fig = go.Figure()
-
-            # 표준편차 매매법 라인
-            fig.add_trace(go.Scatter(
-                x=portfolio_df['date'],
-                y=portfolio_df['total_value'],
-                mode='lines',
-                name='표준편차 매매법',
-                line=dict(color='#00cc96', width=2)
-            ))
-
-            # Buy & Hold 라인
-            fig.add_trace(go.Scatter(
-                x=portfolio_df['date'],
-                y=backtest_results['buy_hold_portfolio_values'],
-                mode='lines',
-                name='Buy & Hold',
-                line=dict(color='#636EFA', width=2, dash='dash')
-            ))
-
-            # 초기 자본 기준선
-            fig.add_hline(
-                y=initial_capital,
-                line_dash="dot",
-                line_color="gray",
-                annotation_text="초기 자본"
-            )
-
-            fig.update_layout(
-                yaxis_title="가치 ($)",
-                height=400,
-                hovermode='x unified',
-                legend=dict(
-                    yanchor="top",
-                    y=0.99,
-                    xanchor="left",
-                    x=0.01
-                )
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        # 상세 통계
-        st.markdown("---")
-        st.subheader("📋 상세 통계")
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.write("**수익률 통계**")
-            st.write(f"- 평균 수익: {backtest_results['avg_win_pct']:.2f}%")
-            st.write(f"- 평균 손실: {backtest_results['avg_loss_pct']:.2f}%")
-            st.write(f"- 최대 낙폭(MDD): {backtest_results['max_drawdown_pct']:.2f}%")
-
-        with col2:
-            st.write("**거래 통계**")
-            st.write(f"- 총 거래: {backtest_results['total_trades']}회")
-            st.write(f"- 승률: {backtest_results['win_rate']:.1f}%")
-            st.write(f"- 평균 보유: {backtest_results['avg_holding_days']:.1f}일")
-
-        with col3:
-            st.write("**전략 vs Buy & Hold**")
-            st.write(f"- 전략 수익: {backtest_results['total_return_pct']:.2f}%")
-            st.write(f"- B&H 수익: {backtest_results['buy_hold_return_pct']:.2f}%")
-            outperformance = backtest_results['total_return_pct'] - backtest_results['buy_hold_return_pct']
-            st.write(f"- 초과 수익: {outperformance:+.2f}%")
-
-        # MDD 비교
-        st.markdown("---")
-        st.subheader("🛡️ 리스크 비교 (최대 낙폭)")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.metric(
-                "표준편차 매매법 MDD",
-                f"{backtest_results['max_drawdown_pct']:.2f}%",
-                delta=f"{backtest_results['max_drawdown_pct'] - backtest_results['buy_hold_mdd']:.2f}% vs B&H",
-                delta_color="inverse"
-            )
-
-        with col2:
-            st.metric(
-                "Buy & Hold MDD",
-                f"{backtest_results['buy_hold_mdd']:.2f}%"
-            )
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     # 탭 3: 차트
     with tab3:

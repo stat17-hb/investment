@@ -158,6 +158,29 @@ class Backtester:
                 'num_positions': len(holdings)
             })
 
+        # 백테스트 종료 시 보유 중인 모든 포지션 청산
+        if holdings:
+            final_date = self.data.index[-1]
+            final_price = self.data['Close'].iloc[-1]
+
+            for position in holdings:
+                profit_pct = (final_price - position['buy_price']) / position['buy_price']
+                sell_amount = position['shares'] * final_price
+                cash += sell_amount
+
+                # 거래 기록
+                self.trades.append({
+                    'buy_date': position['buy_date'],
+                    'sell_date': final_date,
+                    'buy_price': position['buy_price'],
+                    'sell_price': final_price,
+                    'shares': position['shares'],
+                    'profit_pct': profit_pct * 100,
+                    'profit_amount': sell_amount - (position['shares'] * position['buy_price']),
+                    'sell_reason': 'End of Backtest',
+                    'holding_days': (final_date - position['buy_date']).days
+                })
+
         # 최종 결과 계산
         return self.calculate_performance()
 
@@ -352,6 +375,28 @@ class Backtester:
             holdings_value = sum([h['shares'] * current_price for h in holdings])
             current_value = holdings_value + cash_remaining
             portfolio_values.append(current_value)
+
+        # 백테스트 종료 시 보유 중인 모든 포지션 청산 (위험 관리 사용 시 거래 기록)
+        if holdings and self.buy_hold_use_risk_mgmt:
+            final_date = self.data.index[-1]
+            final_price = self.data['Close'].iloc[-1]
+
+            for position in holdings:
+                profit_pct = (final_price - position['buy_price']) / position['buy_price']
+                sell_amount = position['shares'] * final_price
+                cash_remaining += sell_amount
+
+                # 거래 기록
+                trades.append({
+                    'buy_date': position['buy_date'],
+                    'sell_date': final_date,
+                    'buy_price': position['buy_price'],
+                    'sell_price': final_price,
+                    'shares': position['shares'],
+                    'profit_pct': profit_pct * 100,
+                    'profit_amount': sell_amount - (position['shares'] * position['buy_price']),
+                    'sell_reason': 'End of Backtest'
+                })
 
         # 최종 결과 계산
         total_shares = sum([h['shares'] for h in holdings])
