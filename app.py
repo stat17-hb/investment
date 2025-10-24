@@ -62,6 +62,20 @@ st.markdown("""
         --tv-red: #EF5350;
     }
 
+    /* 라이트 모드 색상 */
+    @media (prefers-color-scheme: light) {
+        :root {
+            --tv-bg-primary: #FFFFFF;
+            --tv-bg-secondary: #F8F9FA;
+            --tv-border: #E0E3E7;
+            --tv-text-primary: #1A1A1A;
+            --tv-text-secondary: #4A4A4A;
+            --tv-blue: #2962FF;
+            --tv-green: #26A69A;
+            --tv-red: #EF5350;
+        }
+    }
+
     /* 메인 배경 */
     .main {
         background-color: var(--tv-bg-primary);
@@ -126,6 +140,16 @@ st.markdown("""
         border-radius: 4px;
     }
 
+    @media (prefers-color-scheme: light) {
+        .stTextInput>div>div>input,
+        .stNumberInput>div>div>input,
+        .stSelectbox>div>div>select {
+            background-color: #FFFFFF;
+            color: var(--tv-text-primary);
+            border: 1px solid #D0D5DD;
+        }
+    }
+
     /* 슬라이더 */
     .stSlider>div>div>div>div {
         background-color: var(--tv-blue);
@@ -163,6 +187,12 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
+    @media (prefers-color-scheme: light) {
+        .dataframe th {
+            background-color: #E8EAED !important;
+        }
+    }
+
     .dataframe td {
         color: var(--tv-text-primary) !important;
     }
@@ -193,14 +223,24 @@ st.markdown("""
     .stMarkdown small {
         color: var(--tv-text-secondary) !important;
     }
+
+    /* 메트릭 카드 텍스트 - 라이트 모드 최적화 */
+    @media (prefers-color-scheme: light) {
+        .metric-card p {
+            color: var(--tv-text-primary) !important;
+        }
+        .metric-card .metric-label {
+            color: var(--tv-text-secondary) !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # 헤더
 st.markdown("""
 <div style='text-align: center; padding: 20px 0;'>
-    <h1 style='color: #FFFFFF; margin-bottom: 5px;'>📊 표준편차 매매 백테스터</h1>
-    <p style='color: #E8E8E8; font-size: 16px;'>Statistical Trading Strategy Analyzer</p>
+    <h1 style='margin-bottom: 5px;'>📊 표준편차 매매 백테스터</h1>
+    <p style='font-size: 16px; opacity: 0.9;'>Statistical Trading Strategy Analyzer</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1018,8 +1058,8 @@ if 'backtest_results' in st.session_state:
                     'profit_amount': '${:.2f}',
                     'holding_days': '{:.0f}'
                 }).applymap(
-                    lambda x: 'background-color: #d4edda' if isinstance(x, (int, float)) and x > 0
-                    else 'background-color: #f8d7da' if isinstance(x, (int, float)) and x < 0
+                    lambda x: 'background-color: #1A4D2E; color: #A8E6CF' if isinstance(x, (int, float)) and x > 0
+                    else 'background-color: #4D1A1A; color: #FFADAD' if isinstance(x, (int, float)) and x < 0
                     else '',
                     subset=['profit_pct', 'profit_amount']
                 ),
