@@ -336,14 +336,39 @@ initial_capital = st.sidebar.number_input(
     step=1000
 )
 
-# 1회 매수 금액
-position_size = st.sidebar.number_input(
-    "1회 매수 금액 ($)",
-    min_value=100,
-    max_value=100000,
-    value=1000,
-    step=100
+# 포지션 사이징 방식
+position_sizing_method = st.sidebar.radio(
+    "포지션 사이징 방식",
+    options=["고정 금액", "동적 (현금 비율)"],
+    help="""
+    **고정 금액**: 매번 같은 금액으로 매수
+    **동적 (현금 비율)**: 보유 현금의 일정 비율로 매수 (복리 효과)
+    """
 )
+
+# 고정 금액 방식
+if position_sizing_method == "고정 금액":
+    position_size = st.sidebar.number_input(
+        "1회 매수 금액 ($)",
+        min_value=100,
+        max_value=100000,
+        value=1000,
+        step=100
+    )
+    cash_allocation_pct = None
+else:
+    # 동적 포지션 사이징
+    position_size = None
+    cash_allocation_pct = st.sidebar.number_input(
+        "현금 대비 매수 비율 (%)",
+        min_value=1,
+        max_value=100,
+        value=20,
+        step=1,
+        help="보유 현금의 n%를 매수에 사용합니다 (예: 현금 $10,000 보유 시 20% = $2,000 매수)"
+    )
+    st.sidebar.info(f"💡 매수 시 보유 현금의 {cash_allocation_pct}%를 투입합니다.")
+
 
 # 매수 기준
 sigma_level = st.sidebar.radio(
@@ -489,7 +514,9 @@ if st.sidebar.button("🔄 분석 시작", type="primary"):
                 backtester = Backtester(
                     data=strategy.data,
                     initial_capital=initial_capital,
-                    position_size=position_size,
+                    position_size=position_size if position_sizing_method == "고정 금액" else None,
+                    position_sizing_method="fixed" if position_sizing_method == "고정 금액" else "dynamic",
+                    cash_allocation_pct=cash_allocation_pct if position_sizing_method == "동적 (현금 비율)" else None,
                     sigma_level=sigma_level,
                     take_profit_pct=take_profit,
                     use_ma_exit=use_ma_exit,

@@ -18,7 +18,9 @@ class Backtester:
         self,
         data: pd.DataFrame,
         initial_capital: float = 10000,
-        position_size: float = 1000,
+        position_size: float = None,
+        position_sizing_method: str = "fixed",
+        cash_allocation_pct: float = None,
         sigma_level: int = 1,
         take_profit_pct: float = 10.0,
         use_ma_exit: bool = True,
@@ -34,7 +36,9 @@ class Backtester:
         Args:
             data: 전략이 적용된 데이터 (StandardDeviationStrategy.data)
             initial_capital: 초기 자본금
-            position_size: 1회 매수 금액
+            position_size: 1회 매수 금액 (고정 금액 방식일 때)
+            position_sizing_method: 포지션 사이징 방식 ("fixed" 또는 "dynamic")
+            cash_allocation_pct: 현금 대비 매수 비율 (동적 방식일 때, %)
             sigma_level: 매수 기준 (1 또는 2)
             take_profit_pct: 목표 수익률 (%)
             use_ma_exit: 이동평균선 회귀 시 매도 여부
@@ -48,7 +52,9 @@ class Backtester:
         """
         self.data = data.copy()
         self.initial_capital = initial_capital
-        self.position_size = position_size
+        self.position_sizing_method = position_sizing_method
+        self.position_size = position_size if position_sizing_method == "fixed" else None
+        self.cash_allocation_pct = cash_allocation_pct if position_sizing_method == "dynamic" else None
         self.sigma_level = sigma_level
         self.take_profit_pct = take_profit_pct / 100
         self.use_ma_exit = use_ma_exit
@@ -94,18 +100,28 @@ class Backtester:
                     in_cooldown = True
 
             # 매수 실행 (쿨다운 기간 중에는 매수 금지)
-            if buy_signal and cash >= self.position_size and not in_cooldown:
-                shares = self.position_size / current_price
-                holdings.append({
-                    'buy_price': current_price,
-                    'shares': shares,
-                    'buy_date': idx,
-                    'buy_signal': signal,
-                    'peak_price': current_price  # 트레일링 스톱용 최고가
-                })
-                cash -= self.position_size
-                self.total_invested += self.position_size  # 총 매수 금액 누적
-                self.buy_count += 1  # 총 매수 횟수 증가
+            if buy_signal and not in_cooldown:
+                # 포지션 사이즈 계산
+                if self.position_sizing_method == "fixed":
+                    # 고정 금액 방식
+                    buy_amount = self.position_size
+                else:
+                    # 동적 방식: 현금의 n% 투입
+                    buy_amount = cash * (self.cash_allocation_pct / 100)
+
+                # 현금이 충분한지 확인
+                if cash >= buy_amount:
+                    shares = buy_amount / current_price
+                    holdings.append({
+                        'buy_price': current_price,
+                        'shares': shares,
+                        'buy_date': idx,
+                        'buy_signal': signal,
+                        'peak_price': current_price  # 트레일링 스톱용 최고가
+                    })
+                    cash -= buy_amount
+                    self.total_invested += buy_amount  # 총 매수 금액 누적
+                    self.buy_count += 1  # 총 매수 횟수 증가
 
             # 매도 조건 체크 (보유 포지션이 있을 때)
             new_holdings = []
@@ -402,8 +418,13 @@ class Backtester:
         # 실제로 매수할 월 수 (데이터가 부족할 수 있음)
         actual_n_months = len(first_trading_days)
 
-        # 실제 매수 가능한 개월수로 분할 금액 재계산 (전액 투입 보장)
-        capital_per_month = self.initial_capital / actual_n_months
+        # 포지션 사이징 방식에 따라 초기 분할 금액 계산
+        if self.position_sizing_method == "fixed":
+            # 고정 금액 방식: 초기 자본을 n등분
+            capital_per_month = self.initial_capital / actual_n_months
+        else:
+            # 동적 방식: 매번 현금의 n%씩 투입 (초기값은 참고용)
+            capital_per_month = None
 
         buy_dates_set = set(first_trading_days)
 
@@ -421,23 +442,31 @@ class Backtester:
             current_price = row.Close
 
             # 매수 시점이면 주식 매수
-            if idx in buy_dates_set and months_bought < actual_n_months and cash_remaining >= capital_per_month:
-                shares = capital_per_month / current_price
-                holdings.append({
-                    'buy_price': current_price,
-                    'shares': shares,
-                    'buy_date': idx,
-                    'peak_price': current_price
-                })
-                cash_remaining -= capital_per_month
-                months_bought += 1
+            if idx in buy_dates_set and months_bought < actual_n_months:
+                # 포지션 사이즈 계산
+                if self.position_sizing_method == "fixed":
+                    buy_amount = capital_per_month
+                else:
+                    # 동적 방식: 현금의 n% 투입
+                    buy_amount = cash_remaining * (self.cash_allocation_pct / 100)
 
-                buy_points.append({
-                    'date': idx,
-                    'price': current_price,
-                    'shares': shares,
-                    'amount': capital_per_month
-                })
+                if cash_remaining >= buy_amount:
+                    shares = buy_amount / current_price
+                    holdings.append({
+                        'buy_price': current_price,
+                        'shares': shares,
+                        'buy_date': idx,
+                        'peak_price': current_price
+                    })
+                    cash_remaining -= buy_amount
+                    months_bought += 1
+
+                    buy_points.append({
+                        'date': idx,
+                        'price': current_price,
+                        'shares': shares,
+                        'amount': buy_amount
+                    })
 
             # 위험 관리 적용 시 매도 조건 체크
             if self.buy_hold_use_risk_mgmt and holdings:
