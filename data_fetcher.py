@@ -127,7 +127,9 @@ class DataFetcher:
         종목의 상장일부터 현재까지 1년 단위로 가능한 기간 목록 반환
 
         Returns:
-            list: ['1y', '2y', '3y', ...] 형태의 기간 목록
+            list: ['1y', '2y', '3y', ..., '10y', 'max'] 형태의 기간 목록
+            - 1년~10년까지는 1년 단위로 표시
+            - 10년 이상인 경우 max 옵션 추가
         """
         try:
             first_date = self.get_first_trade_date()
@@ -136,16 +138,17 @@ class DataFetcher:
             # 상장일부터 현재까지의 기간 (년 단위)
             years_available = (now - first_date).days / 365.25
 
-            # 최소 1년부터 시작, 1년 단위로 리스트 생성
+            # 1년부터 10년까지 (또는 데이터가 있는 년수까지 중 작은 값)
+            max_year = min(10, int(years_available))
             periods = []
-            for year in range(1, int(years_available) + 1):
+            for year in range(1, max_year + 1):
                 periods.append(f"{year}y")
 
-            # max 옵션 추가
-            if years_available >= 1:
+            # 10년 이상 데이터가 있으면 max 옵션 추가
+            if years_available > 10:
                 periods.append("max")
 
             return periods if periods else ["1y"]  # 최소한 1y는 반환
         except Exception as e:
-            # 에러 발생 시 기본값 반환
-            return ["1y", "2y", "3y", "5y", "max"]
+            # 에러 발생 시 기본값 반환 (1y~10y, max)
+            return ["1y", "2y", "3y", "4y", "5y", "6y", "7y", "8y", "9y", "10y", "max"]
