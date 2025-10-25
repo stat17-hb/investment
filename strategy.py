@@ -88,23 +88,37 @@ class StandardDeviationStrategy:
         self.data = self.data.dropna(subset=['Std_Dev', 'Daily_Std_Dev', 'MA_20', 'RSI'])
 
     def generate_signals(self):
-        """매수/매도 시그널 생성"""
+        """
+        매수/매도 시그널 생성 (Lookahead Bias 방지)
+
+        핵심 원칙: T일의 매수 결정은 T-1일까지의 데이터로만 이루어져야 함
+
+        로직:
+        - T일의 수익률 = (Close[T] - Close[T-1]) / Close[T-1]
+        - T-1일까지의 표준편차 = Daily_Std_Dev[T-1]
+        - T일의 수익률이 T-1일까지의 표준편차 기준으로 충분히 하락했는지 판단
+        - 조건 충족 시 T일 종가에 매수
+
+        이는 "T일 장 마감 후 종가를 확인하고, 어제까지의 변동성 기준으로
+        충분히 떨어졌다고 판단하여 종가 또는 시간외 거래로 매수"하는
+        실제 가능한 시나리오입니다.
+        """
         self.data['Signal'] = 0  # 0: 관망, 1: 1σ 매수, 2: 2σ 매수
 
         # 전일 대비 하락폭 계산
         self.data['Price_Change_Pct'] = self.data['Returns'] * 100
 
-        # 1σ 매수 시그널: 일일 수익률이 -1 일일표준편차 이하
-        # 예: 일일 표준편차가 3%라면, 하루에 -3% 이상 하락 시 매수
-        condition_1sigma = (
-            (self.data['Returns'] <= -self.data['Daily_Std_Dev'])
-        )
+        # ⚠️ Lookahead Bias 방지: T-1일까지의 표준편차 사용
+        # shift(1)을 사용하여 T일 시점에서는 T-1일의 표준편차만 알고 있음
+        daily_std_lagged = self.data['Daily_Std_Dev'].shift(1)
 
-        # 2σ 매수 시그널: 일일 수익률이 -2 일일표준편차 이하
-        # 예: 일일 표준편차가 3%라면, 하루에 -6% 이상 하락 시 매수
-        condition_2sigma = (
-            (self.data['Returns'] <= -2 * self.data['Daily_Std_Dev'])
-        )
+        # 1σ 매수 시그널: T일의 수익률이 T-1일까지의 1σ 이하로 하락
+        # 예: 어제까지의 일일 표준편차가 3%였고, 오늘 -3% 이상 하락 시 매수
+        condition_1sigma = (self.data['Returns'] <= -daily_std_lagged)
+
+        # 2σ 매수 시그널: T일의 수익률이 T-1일까지의 2σ 이하로 하락
+        # 예: 어제까지의 일일 표준편차가 3%였고, 오늘 -6% 이상 하락 시 매수
+        condition_2sigma = (self.data['Returns'] <= -2 * daily_std_lagged)
 
         self.data.loc[condition_1sigma, 'Signal'] = 1
         self.data.loc[condition_2sigma, 'Signal'] = 2
