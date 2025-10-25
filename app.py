@@ -606,10 +606,11 @@ if 'backtest_results' in st.session_state:
         with col1:
             st.markdown(f"""
             <div class='metric-card' style='text-align: center;'>
-                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>표준편차</p>
+                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>연율화 표준편차</p>
                 <p style='color: #2962FF; font-size: 28px; font-weight: 700; margin: 10px 0;'>
                     {current_stats['std_dev_pct']:.2f}%
                 </p>
+                <p style='color: #9E9E9E; font-size: 12px; margin: -4px 0 0;'>일간 σ: {current_stats['daily_std_dev_pct']:.2f}%</p>
             </div>
             """, unsafe_allow_html=True)
 
@@ -654,8 +655,10 @@ if 'backtest_results' in st.session_state:
         with col1:
             st.subheader("📊 전략 통계")
             st.write(f"- **분석 기간**: {overall_stats['total_days']}일")
-            st.write(f"- **평균 표준편차**: {overall_stats['avg_std_dev']:.2f}%")
-            st.write(f"- **현재 표준편차**: {overall_stats['current_std_dev']:.2f}%")
+            st.write(f"- **평균 표준편차 (연율화)**: {overall_stats['avg_std_dev']:.2f}%")
+            st.write(f"- **평균 일간 표준편차**: {overall_stats['avg_daily_std_dev']:.2f}%")
+            st.write(f"- **현재 표준편차 (연율화)**: {overall_stats['current_std_dev']:.2f}%")
+            st.write(f"- **현재 일간 표준편차**: {overall_stats['current_daily_std_dev']:.2f}%")
 
         with col2:
             st.subheader("🎯 매수 기회")
@@ -669,10 +672,14 @@ if 'backtest_results' in st.session_state:
         signals = strategy.get_buy_signals(sigma_level=sigma_level)
         if not signals.empty:
             recent_signals = signals.tail(10).sort_index(ascending=False)
+            recent_signals_display = recent_signals.rename(columns={
+                'Std_Dev': 'Annualized_Std_Dev'
+            })
             st.dataframe(
-                recent_signals.style.format({
+                recent_signals_display.style.format({
                     'Close': '${:.2f}',
-                    'Std_Dev': '{:.2%}',
+                    'Annualized_Std_Dev': '{:.2%}',
+                    'Daily_Std_Dev': '{:.2%}',
                     'Price_Change_Pct': '{:.2f}%',
                     'RSI': '{:.1f}'
                 }),

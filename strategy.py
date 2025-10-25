@@ -52,16 +52,17 @@ class StandardDeviationStrategy:
         # 일일 수익률 계산
         self.data['Returns'] = self.data['Close'].pct_change()
 
-        # 롤링 표준편차 계산 (1년 기준 = 연간 표준편차)
-        self.data['Std_Dev'] = self.data['Returns'].rolling(
+        # 일일 수익률의 롤링 표준편차 계산
+        self.data['Daily_Std_Dev'] = self.data['Returns'].rolling(
             window=self.lookback_period
         ).std()
 
-        # 일일 표준편차 계산 (연간 표준편차 / sqrt(252))
-        self.data['Daily_Std_Dev'] = self.data['Std_Dev'] / np.sqrt(252)
+        # 연율화 표준편차 (연간 변동성)
+        self.data['Std_Dev'] = self.data['Daily_Std_Dev'] * np.sqrt(252)
 
-        # 표준편차를 가격으로 환산 (현재가 * 표준편차)
-        self.data['Std_Dev_Price'] = self.data['Close'] * self.data['Std_Dev']
+        # 표준편차를 가격으로 환산 (현재가 * 일일 표준편차)
+        # 가격 밴드는 하루 변동폭을 기준으로 계산한다.
+        self.data['Std_Dev_Price'] = self.data['Close'] * self.data['Daily_Std_Dev']
 
         # 1σ, 2σ 매수 가격 계산
         self.data['Buy_1Sigma'] = self.data['Close'] - self.data['Std_Dev_Price']
@@ -115,6 +116,7 @@ class StandardDeviationStrategy:
         return {
             'current_price': latest['Close'],
             'std_dev_pct': latest['Std_Dev'] * 100,
+            'daily_std_dev_pct': latest['Daily_Std_Dev'] * 100,
             'std_dev_price': latest['Std_Dev_Price'],
             'buy_1sigma_price': latest['Buy_1Sigma'],
             'buy_2sigma_price': latest['Buy_2Sigma'],
@@ -141,7 +143,7 @@ class StandardDeviationStrategy:
         else:
             signals = self.data[self.data['Signal'] == 2].copy()
 
-        return signals[['Close', 'Signal', 'Std_Dev', 'Price_Change_Pct', 'RSI']]
+        return signals[['Close', 'Signal', 'Std_Dev', 'Daily_Std_Dev', 'Price_Change_Pct', 'RSI']]
 
     def calculate_statistics(self) -> dict:
         """전략 통계 계산"""
@@ -156,5 +158,7 @@ class StandardDeviationStrategy:
             'signals_1sigma_per_year': (signals_1sigma / total_days) * 252 if total_days > 0 else 0,
             'signals_2sigma_per_year': (signals_2sigma / total_days) * 252 if total_days > 0 else 0,
             'avg_std_dev': self.data['Std_Dev'].mean() * 100,
+            'avg_daily_std_dev': self.data['Daily_Std_Dev'].mean() * 100,
             'current_std_dev': self.data['Std_Dev'].iloc[-1] * 100,
+            'current_daily_std_dev': self.data['Daily_Std_Dev'].iloc[-1] * 100,
         }

@@ -72,10 +72,11 @@ class Backtester:
         cash = self.initial_capital
         holdings = []  # (매수가격, 수량, 매수일자)
 
-        for idx, row in self.data.iterrows():
-            current_price = row['Close']
-            signal = row['Signal']
-            ma_20 = row['MA_20']
+        for row in self.data.itertuples():
+            idx = row.Index
+            current_price = row.Close
+            signal = row.Signal
+            ma_20 = row.MA_20
 
             # 매수 조건 체크
             buy_signal = False
@@ -112,6 +113,7 @@ class Backtester:
                 profit_pct = (current_price - position['buy_price']) / position['buy_price']
                 should_sell = False
                 sell_reason = ''
+                stop_loss_triggered = False
 
                 # 최고가 업데이트 (트레일링 스톱용)
                 if current_price > position['peak_price']:
@@ -121,7 +123,7 @@ class Backtester:
                 if self.use_stop_loss and profit_pct <= -self.stop_loss_pct:
                     should_sell = True
                     sell_reason = 'Stop Loss'
-                    self.last_stop_loss_date = idx  # 손절 발생 일자 기록
+                    stop_loss_triggered = True
 
                 # 2. 트레일링 스톱 (Trailing Stop)
                 elif self.use_trailing_stop:
@@ -129,7 +131,6 @@ class Backtester:
                     if drawdown_from_peak <= -self.trailing_stop_pct:
                         should_sell = True
                         sell_reason = 'Trailing Stop'
-                        self.last_stop_loss_date = idx  # 손절 발생 일자 기록
 
                 # 3. 목표 수익률 달성
                 elif profit_pct >= self.take_profit_pct:
@@ -146,6 +147,9 @@ class Backtester:
                     # 매도 실행
                     sell_amount = position['shares'] * current_price
                     cash += sell_amount
+
+                    if stop_loss_triggered:
+                        self.last_stop_loss_date = idx  # 손절 발생 일자 기록
 
                     # 거래 기록
                     self.trades.append({
@@ -412,8 +416,9 @@ class Backtester:
 
         # 매일 시뮬레이션
         months_bought = 0
-        for idx, row in self.data.iterrows():
-            current_price = row['Close']
+        for row in self.data.itertuples():
+            idx = row.Index
+            current_price = row.Close
 
             # 매수 시점이면 주식 매수
             if idx in buy_dates_set and months_bought < actual_n_months and cash_remaining >= capital_per_month:
