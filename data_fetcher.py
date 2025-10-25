@@ -33,8 +33,11 @@ class DataFetcher:
             DataFrame with OHLCV data
         """
         try:
+            # max period는 extra_days와 관계없이 그대로 사용
+            if period.lower() == "max":
+                df = self.stock.history(period="max")
             # extra_days가 있으면 start/end date를 직접 계산
-            if extra_days > 0:
+            elif extra_days > 0:
                 from datetime import datetime, timedelta
 
                 # period를 일수로 변환
@@ -99,3 +102,50 @@ class DataFetcher:
                 'industry': 'N/A',
                 'description': 'N/A'
             }
+
+    def get_first_trade_date(self) -> datetime:
+        """
+        종목의 최초 거래일(상장일) 가져오기
+
+        Returns:
+            datetime: 최초 거래일
+        """
+        try:
+            # max 기간의 데이터 가져오기
+            df = self.stock.history(period="max")
+            if df.empty:
+                raise ValueError(f"No historical data found for {self.ticker}")
+
+            # 첫 거래일 반환
+            first_date = df.index[0]
+            return first_date
+        except Exception as e:
+            raise Exception(f"Error fetching first trade date: {str(e)}")
+
+    def get_available_periods(self) -> list:
+        """
+        종목의 상장일부터 현재까지 1년 단위로 가능한 기간 목록 반환
+
+        Returns:
+            list: ['1y', '2y', '3y', ...] 형태의 기간 목록
+        """
+        try:
+            first_date = self.get_first_trade_date()
+            now = datetime.now()
+
+            # 상장일부터 현재까지의 기간 (년 단위)
+            years_available = (now - first_date).days / 365.25
+
+            # 최소 1년부터 시작, 1년 단위로 리스트 생성
+            periods = []
+            for year in range(1, int(years_available) + 1):
+                periods.append(f"{year}y")
+
+            # max 옵션 추가
+            if years_available >= 1:
+                periods.append("max")
+
+            return periods if periods else ["1y"]  # 최소한 1y는 반환
+        except Exception as e:
+            # 에러 발생 시 기본값 반환
+            return ["1y", "2y", "3y", "5y", "max"]

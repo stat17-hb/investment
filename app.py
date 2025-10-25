@@ -39,6 +39,32 @@ def fetch_stock_data(ticker: str, period: str, extra_days: int = 0):
                 raise e
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_available_periods(ticker: str):
+    """
+    종목의 가능한 데이터 기간 목록 가져오기 (1시간 캐시)
+
+    Args:
+        ticker: 종목 티커
+
+    Returns:
+        list: 가능한 기간 목록 ['1y', '2y', ...]
+    """
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            fetcher = DataFetcher(ticker)
+            periods = fetcher.get_available_periods()
+            return periods
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            else:
+                # 에러 발생 시 기본값 반환
+                return ["1y", "2y", "3y", "5y", "max"]
+
+
 # 페이지 설정
 st.set_page_config(
     page_title="표준편차 매매 백테스터",
@@ -257,13 +283,34 @@ ticker = st.sidebar.text_input(
     help="예: QLD, SOXL, TQQQ, SPY, NVDA 등"
 ).upper()
 
-# 데이터 기간
-period = st.sidebar.selectbox(
-    "데이터 기간",
-    options=["1y", "2y", "3y", "5y"],
-    index=1,
-    help="백테스트에 사용할 과거 데이터 기간"
-)
+# 데이터 기간 (티커별 가능한 기간 동적 생성)
+try:
+    with st.spinner(f"{ticker} 가능 기간 확인 중..."):
+        available_periods = get_available_periods(ticker)
+
+    # 5y가 있으면 그걸 기본값으로, 없으면 마지막에서 두 번째 (max 제외한 가장 긴 기간)
+    if "5y" in available_periods:
+        default_index = available_periods.index("5y")
+    elif len(available_periods) > 1:
+        # max를 제외한 가장 긴 기간
+        default_index = len(available_periods) - 2 if available_periods[-1] == "max" else len(available_periods) - 1
+    else:
+        default_index = 0
+
+    period = st.sidebar.selectbox(
+        "데이터 기간",
+        options=available_periods,
+        index=default_index,
+        help=f"백테스트에 사용할 과거 데이터 기간 (상장일부터 사용 가능)"
+    )
+except Exception as e:
+    st.sidebar.warning(f"⚠️ 기간 목록을 가져올 수 없습니다. 기본값을 사용합니다.")
+    period = st.sidebar.selectbox(
+        "데이터 기간",
+        options=["1y", "2y", "3y", "5y", "max"],
+        index=3,
+        help="백테스트에 사용할 과거 데이터 기간"
+    )
 
 # 표준편차 계산 기간
 lookback = st.sidebar.number_input(
@@ -309,7 +356,7 @@ take_profit = st.sidebar.slider(
     "목표 수익률 (%)",
     min_value=5,
     max_value=900,
-    value=10,
+    value=900,
     step=5,
     help="""
     매수가 대비 목표 수익률 달성 시 매도합니다.
@@ -353,7 +400,7 @@ stop_loss_pct = st.sidebar.slider(
 # 트레일링 스톱 (Trailing Stop)
 use_trailing_stop = st.sidebar.checkbox(
     "트레일링 스톱 사용",
-    value=False,
+    value=True,
     help="보유 중 최고가 대비 일정 비율 하락 시 매도"
 )
 
@@ -361,7 +408,7 @@ trailing_stop_pct = st.sidebar.slider(
     "트레일링 스톱 비율 (%)",
     min_value=1,
     max_value=50,
-    value=15,
+    value=30,
     step=1,
     disabled=not use_trailing_stop,
     help="보유 중 최고가 대비 -n% 하락 시 매도"
@@ -384,19 +431,20 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Buy & Hold 설정")
 
 # 데이터 기간에 따른 개월수 계산
-period_months = {
-    "1y": 12,
-    "2y": 24,
-    "3y": 36,
-    "5y": 60
-}
-default_months = period_months.get(period, 12)
+if period.lower() == "max":
+    default_months = 120  # max는 10년(120개월)으로 설정
+elif period.lower().endswith('y'):
+    # "10y" -> 10 * 12 = 120개월
+    years = int(period[:-1])
+    default_months = years * 12
+else:
+    default_months = 12  # 기본값
 
 # Buy & Hold 분할 매수
 buy_hold_splits = st.sidebar.number_input(
     "분할 매수 기간 (개월)",
     min_value=1,
-    max_value=120,
+    max_value=240,
     value=default_months,
     step=1,
     help="Buy & Hold 전략 시 n개월 동안 매월 첫 거래일에 분할 매수 (Dollar Cost Averaging)"
