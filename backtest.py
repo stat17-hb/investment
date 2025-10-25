@@ -516,6 +516,9 @@ class Backtester:
                     'sell_reason': 'End of Backtest'
                 })
 
+            # 모든 포지션을 현금화했으므로 보유 목록 초기화
+            holdings = []
+
         # 최종 결과 계산
         total_shares = sum([h['shares'] for h in holdings])
         final_value = cash_remaining + sum([h['shares'] * self.data['Close'].iloc[-1] for h in holdings])
