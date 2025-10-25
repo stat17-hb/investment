@@ -26,6 +26,7 @@ class Backtester:
         stop_loss_pct: float = 5.0,
         use_trailing_stop: bool = False,
         trailing_stop_pct: float = 10.0,
+        cooldown_months: int = 0,
         buy_hold_splits: int = 1,
         buy_hold_use_risk_mgmt: bool = False
     ):
@@ -41,6 +42,7 @@ class Backtester:
             stop_loss_pct: 손절 비율 (%)
             use_trailing_stop: 트레일링 스톱 사용 여부
             trailing_stop_pct: 트레일링 스톱 비율 (%)
+            cooldown_months: 손절 후 매수 대기 기간 (개월)
             buy_hold_splits: Buy & Hold 분할 매수 횟수
             buy_hold_use_risk_mgmt: Buy & Hold에도 위험 관리 적용 여부
         """
@@ -54,6 +56,7 @@ class Backtester:
         self.stop_loss_pct = stop_loss_pct / 100
         self.use_trailing_stop = use_trailing_stop
         self.trailing_stop_pct = trailing_stop_pct / 100
+        self.cooldown_months = cooldown_months
         self.buy_hold_splits = buy_hold_splits
         self.buy_hold_use_risk_mgmt = buy_hold_use_risk_mgmt
 
@@ -62,6 +65,7 @@ class Backtester:
         self.portfolio_value = []
         self.total_invested = 0  # 총 매수 금액
         self.buy_count = 0  # 총 매수 횟수
+        self.last_stop_loss_date = None  # 마지막 손절 발생 일자
 
     def run(self) -> dict:
         """백테스트 실행"""
@@ -80,8 +84,16 @@ class Backtester:
             elif self.sigma_level == 2 and signal == 2:
                 buy_signal = True
 
-            # 매수 실행
-            if buy_signal and cash >= self.position_size:
+            # 손절 후 쿨다운 기간 체크
+            in_cooldown = False
+            if self.cooldown_months > 0 and self.last_stop_loss_date is not None:
+                # 손절 후 N개월 지났는지 확인
+                cooldown_end_date = self.last_stop_loss_date + pd.DateOffset(months=self.cooldown_months)
+                if idx < cooldown_end_date:
+                    in_cooldown = True
+
+            # 매수 실행 (쿨다운 기간 중에는 매수 금지)
+            if buy_signal and cash >= self.position_size and not in_cooldown:
                 shares = self.position_size / current_price
                 holdings.append({
                     'buy_price': current_price,
@@ -109,6 +121,7 @@ class Backtester:
                 if self.use_stop_loss and profit_pct <= -self.stop_loss_pct:
                     should_sell = True
                     sell_reason = 'Stop Loss'
+                    self.last_stop_loss_date = idx  # 손절 발생 일자 기록
 
                 # 2. 트레일링 스톱 (Trailing Stop)
                 elif self.use_trailing_stop:
@@ -116,6 +129,7 @@ class Backtester:
                     if drawdown_from_peak <= -self.trailing_stop_pct:
                         should_sell = True
                         sell_reason = 'Trailing Stop'
+                        self.last_stop_loss_date = idx  # 손절 발생 일자 기록
 
                 # 3. 목표 수익률 달성
                 elif profit_pct >= self.take_profit_pct:

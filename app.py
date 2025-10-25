@@ -324,6 +324,19 @@ trailing_stop_pct = st.sidebar.slider(
     help="보유 중 최고가 대비 -n% 하락 시 매도"
 )
 
+# 손절 후 대기 기간 (Cooldown Period)
+cooldown_months = st.sidebar.number_input(
+    "손절 후 대기 기간 (개월)",
+    min_value=0,
+    max_value=12,
+    value=0,
+    step=1,
+    help="Stop Loss 또는 Trailing Stop 후 N개월 동안 매수를 금지합니다 (0=대기없음)"
+)
+
+if cooldown_months > 0:
+    st.sidebar.info(f"💡 손절 후 {cooldown_months}개월 동안 매수가 금지됩니다.")
+
 st.sidebar.markdown("---")
 st.sidebar.subheader("Buy & Hold 설정")
 
@@ -391,6 +404,7 @@ if st.sidebar.button("🔄 분석 시작", type="primary"):
                     stop_loss_pct=stop_loss_pct,
                     use_trailing_stop=use_trailing_stop,
                     trailing_stop_pct=trailing_stop_pct,
+                    cooldown_months=cooldown_months,
                     buy_hold_splits=buy_hold_splits,
                     buy_hold_use_risk_mgmt=buy_hold_use_risk_mgmt
                 )
