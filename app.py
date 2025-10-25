@@ -288,12 +288,14 @@ try:
     with st.spinner(f"{ticker} 가능 기간 확인 중..."):
         available_periods = get_available_periods(ticker)
 
-    # 5y가 있으면 그걸 기본값으로, 없으면 마지막에서 두 번째 (max 제외한 가장 긴 기간)
-    if "5y" in available_periods:
+    # max를 기본값으로 설정 (전체 데이터 사용)
+    if "max" in available_periods:
+        default_index = available_periods.index("max")
+    elif "5y" in available_periods:
         default_index = available_periods.index("5y")
     elif len(available_periods) > 1:
-        # max를 제외한 가장 긴 기간
-        default_index = len(available_periods) - 2 if available_periods[-1] == "max" else len(available_periods) - 1
+        # 가장 긴 기간
+        default_index = len(available_periods) - 1
     else:
         default_index = 0
 
@@ -301,14 +303,14 @@ try:
         "데이터 기간",
         options=available_periods,
         index=default_index,
-        help=f"백테스트에 사용할 과거 데이터 기간 (상장일부터 사용 가능)"
+        help=f"백테스트에 사용할 과거 데이터 기간 (상장일부터 사용 가능, 기본값: max)"
     )
 except Exception as e:
     st.sidebar.warning(f"⚠️ 기간 목록을 가져올 수 없습니다. 기본값을 사용합니다.")
     period = st.sidebar.selectbox(
         "데이터 기간",
         options=["1y", "2y", "3y", "5y", "max"],
-        index=3,
+        index=4,  # max를 기본값으로
         help="백테스트에 사용할 과거 데이터 기간"
     )
 
@@ -432,7 +434,7 @@ st.sidebar.subheader("Buy & Hold 설정")
 
 # 데이터 기간에 따른 개월수 계산
 if period.lower() == "max":
-    default_months = 120  # max는 10년(120개월)으로 설정
+    default_months = 240  # max는 20년(240개월)으로 설정 (실제 데이터만큼만 사용됨)
 elif period.lower().endswith('y'):
     # "10y" -> 10 * 12 = 120개월
     years = int(period[:-1])
