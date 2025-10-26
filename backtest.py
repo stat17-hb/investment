@@ -162,7 +162,7 @@ class Backtester:
                     profit_pct = (current_price - position['buy_price']) / position['buy_price']
                     should_sell = False
                     sell_reason = ''
-                    stop_loss_triggered = False
+                    cooldown_triggered = False
 
                     # 최고가 업데이트 (트레일링 스톱용)
                     if current_price > position['peak_price']:
@@ -172,7 +172,7 @@ class Backtester:
                     if self.use_stop_loss and profit_pct <= -self.stop_loss_pct:
                         should_sell = True
                         sell_reason = 'Stop Loss'
-                        stop_loss_triggered = True
+                        cooldown_triggered = True
 
                     # 2. 트레일링 스톱 (Trailing Stop)
                     elif self.use_trailing_stop:
@@ -180,6 +180,7 @@ class Backtester:
                         if drawdown_from_peak <= -self.trailing_stop_pct:
                             should_sell = True
                             sell_reason = 'Trailing Stop'
+                            cooldown_triggered = True
 
                     # 3. 이동평균선 회귀 (MA20 돌파)
                     elif self.use_ma_exit and current_price > ma_20 and not pd.isna(ma_20):
@@ -192,7 +193,7 @@ class Backtester:
                         sell_amount = position['shares'] * current_price
                         cash += sell_amount
 
-                        if stop_loss_triggered:
+                        if cooldown_triggered:
                             self.last_stop_loss_date = idx  # 손절 발생 일자 기록
 
                         # 거래 기록
