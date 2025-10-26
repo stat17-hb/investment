@@ -22,6 +22,7 @@ class Backtester:
         position_sizing_method: str = "fixed",
         cash_allocation_pct: float = None,
         sigma_level: int = 1,
+        use_take_profit: bool = False,
         take_profit_pct: float = 10.0,
         use_ma_exit: bool = True,
         use_stop_loss: bool = False,
@@ -40,7 +41,8 @@ class Backtester:
             position_sizing_method: 포지션 사이징 방식 ("fixed" 또는 "dynamic")
             cash_allocation_pct: 현금 대비 매수 비율 (동적 방식일 때, %)
             sigma_level: 매수 기준 (1 또는 2)
-            take_profit_pct: 목표 수익률 (%)
+            use_take_profit: 목표 수익률 사용 여부
+            take_profit_pct: 목표 수익률 (%) - 계좌 전체 수익률 기준
             use_ma_exit: 이동평균선 회귀 시 매도 여부
             use_stop_loss: 손절선 사용 여부
             stop_loss_pct: 손절 비율 (%)
@@ -56,6 +58,7 @@ class Backtester:
         self.position_size = position_size if position_sizing_method == "fixed" else None
         self.cash_allocation_pct = cash_allocation_pct if position_sizing_method == "dynamic" else None
         self.sigma_level = sigma_level
+        self.use_take_profit = use_take_profit
         self.take_profit_pct = take_profit_pct / 100
         self.use_ma_exit = use_ma_exit
         self.use_stop_loss = use_stop_loss
@@ -123,66 +126,91 @@ class Backtester:
                     self.total_invested += buy_amount  # 총 매수 금액 누적
                     self.buy_count += 1  # 총 매수 횟수 증가
 
-            # 매도 조건 체크 (보유 포지션이 있을 때)
-            new_holdings = []
-            for position in holdings:
-                profit_pct = (current_price - position['buy_price']) / position['buy_price']
-                should_sell = False
-                sell_reason = ''
-                stop_loss_triggered = False
+            # 계좌 전체 수익률 기준 목표 수익률 체크 (우선 순위 최상위)
+            if self.use_take_profit and holdings:
+                holdings_value = sum([h['shares'] * current_price for h in holdings])
+                total_value = cash + holdings_value
+                account_profit_pct = (total_value - self.initial_capital) / self.initial_capital
 
-                # 최고가 업데이트 (트레일링 스톱용)
-                if current_price > position['peak_price']:
-                    position['peak_price'] = current_price
+                # 계좌 전체 수익률이 목표치에 도달하면 모든 포지션 일괄 청산
+                if account_profit_pct >= self.take_profit_pct:
+                    for position in holdings:
+                        profit_pct = (current_price - position['buy_price']) / position['buy_price']
+                        sell_amount = position['shares'] * current_price
+                        cash += sell_amount
 
-                # 1. 손절선 (Stop Loss)
-                if self.use_stop_loss and profit_pct <= -self.stop_loss_pct:
-                    should_sell = True
-                    sell_reason = 'Stop Loss'
-                    stop_loss_triggered = True
+                        # 거래 기록
+                        self.trades.append({
+                            'buy_date': position['buy_date'],
+                            'sell_date': idx,
+                            'buy_price': position['buy_price'],
+                            'sell_price': current_price,
+                            'shares': position['shares'],
+                            'profit_pct': profit_pct * 100,
+                            'profit_amount': sell_amount - (position['shares'] * position['buy_price']),
+                            'sell_reason': f'Take Profit (Account: {account_profit_pct*100:.1f}%)',
+                            'holding_days': (idx - position['buy_date']).days
+                        })
 
-                # 2. 트레일링 스톱 (Trailing Stop)
-                elif self.use_trailing_stop:
-                    drawdown_from_peak = (current_price - position['peak_price']) / position['peak_price']
-                    if drawdown_from_peak <= -self.trailing_stop_pct:
+                    # 모든 포지션 청산 완료
+                    holdings = []
+
+            # 개별 포지션 매도 조건 체크 (목표 수익률로 전체 청산되지 않은 경우)
+            if holdings:
+                new_holdings = []
+                for position in holdings:
+                    profit_pct = (current_price - position['buy_price']) / position['buy_price']
+                    should_sell = False
+                    sell_reason = ''
+                    stop_loss_triggered = False
+
+                    # 최고가 업데이트 (트레일링 스톱용)
+                    if current_price > position['peak_price']:
+                        position['peak_price'] = current_price
+
+                    # 1. 손절선 (Stop Loss)
+                    if self.use_stop_loss and profit_pct <= -self.stop_loss_pct:
                         should_sell = True
-                        sell_reason = 'Trailing Stop'
+                        sell_reason = 'Stop Loss'
+                        stop_loss_triggered = True
 
-                # 3. 목표 수익률 달성
-                elif profit_pct >= self.take_profit_pct:
-                    should_sell = True
-                    sell_reason = 'Take Profit'
+                    # 2. 트레일링 스톱 (Trailing Stop)
+                    elif self.use_trailing_stop:
+                        drawdown_from_peak = (current_price - position['peak_price']) / position['peak_price']
+                        if drawdown_from_peak <= -self.trailing_stop_pct:
+                            should_sell = True
+                            sell_reason = 'Trailing Stop'
 
-                # 4. 이동평균선 회귀 (MA20 돌파)
-                elif self.use_ma_exit and current_price > ma_20 and not pd.isna(ma_20):
-                    if position['buy_price'] < ma_20:  # 매수가가 MA 아래였다면
-                        should_sell = True
-                        sell_reason = 'MA Cross'
+                    # 3. 이동평균선 회귀 (MA20 돌파)
+                    elif self.use_ma_exit and current_price > ma_20 and not pd.isna(ma_20):
+                        if position['buy_price'] < ma_20:  # 매수가가 MA 아래였다면
+                            should_sell = True
+                            sell_reason = 'MA Cross'
 
-                if should_sell:
-                    # 매도 실행
-                    sell_amount = position['shares'] * current_price
-                    cash += sell_amount
+                    if should_sell:
+                        # 매도 실행
+                        sell_amount = position['shares'] * current_price
+                        cash += sell_amount
 
-                    if stop_loss_triggered:
-                        self.last_stop_loss_date = idx  # 손절 발생 일자 기록
+                        if stop_loss_triggered:
+                            self.last_stop_loss_date = idx  # 손절 발생 일자 기록
 
-                    # 거래 기록
-                    self.trades.append({
-                        'buy_date': position['buy_date'],
-                        'sell_date': idx,
-                        'buy_price': position['buy_price'],
-                        'sell_price': current_price,
-                        'shares': position['shares'],
-                        'profit_pct': profit_pct * 100,
-                        'profit_amount': sell_amount - (position['shares'] * position['buy_price']),
-                        'sell_reason': sell_reason,
-                        'holding_days': (idx - position['buy_date']).days
-                    })
-                else:
-                    new_holdings.append(position)
+                        # 거래 기록
+                        self.trades.append({
+                            'buy_date': position['buy_date'],
+                            'sell_date': idx,
+                            'buy_price': position['buy_price'],
+                            'sell_price': current_price,
+                            'shares': position['shares'],
+                            'profit_pct': profit_pct * 100,
+                            'profit_amount': sell_amount - (position['shares'] * position['buy_price']),
+                            'sell_reason': sell_reason,
+                            'holding_days': (idx - position['buy_date']).days
+                        })
+                    else:
+                        new_holdings.append(position)
 
-            holdings = new_holdings
+                holdings = new_holdings
 
             # 포트폴리오 가치 계산
             holdings_value = sum([h['shares'] * current_price for h in holdings])
@@ -470,53 +498,78 @@ class Backtester:
 
             # 위험 관리 적용 시 매도 조건 체크
             if self.buy_hold_use_risk_mgmt and holdings:
-                new_holdings = []
-                for position in holdings:
-                    profit_pct = (current_price - position['buy_price']) / position['buy_price']
-                    should_sell = False
-                    sell_reason = ''
+                # 계좌 전체 수익률 기준 목표 수익률 체크 (우선 순위 최상위)
+                if self.use_take_profit:
+                    holdings_value = sum([h['shares'] * current_price for h in holdings])
+                    total_value = cash_remaining + holdings_value
+                    account_profit_pct = (total_value - self.initial_capital) / self.initial_capital
 
-                    # 최고가 업데이트 (트레일링 스톱용)
-                    if current_price > position['peak_price']:
-                        position['peak_price'] = current_price
+                    # 계좌 전체 수익률이 목표치에 도달하면 모든 포지션 일괄 청산
+                    if account_profit_pct >= self.take_profit_pct:
+                        for position in holdings:
+                            profit_pct = (current_price - position['buy_price']) / position['buy_price']
+                            sell_amount = position['shares'] * current_price
+                            cash_remaining += sell_amount
 
-                    # 1. 손절선
-                    if self.use_stop_loss and profit_pct <= -self.stop_loss_pct:
-                        should_sell = True
-                        sell_reason = 'Stop Loss'
+                            # 거래 기록
+                            trades.append({
+                                'buy_date': position['buy_date'],
+                                'sell_date': idx,
+                                'buy_price': position['buy_price'],
+                                'sell_price': current_price,
+                                'shares': position['shares'],
+                                'profit_pct': profit_pct * 100,
+                                'profit_amount': sell_amount - (position['shares'] * position['buy_price']),
+                                'sell_reason': f'Take Profit (Account: {account_profit_pct*100:.1f}%)'
+                            })
 
-                    # 2. 트레일링 스톱
-                    elif self.use_trailing_stop:
-                        drawdown_from_peak = (current_price - position['peak_price']) / position['peak_price']
-                        if drawdown_from_peak <= -self.trailing_stop_pct:
+                        # 모든 포지션 청산 완료
+                        holdings = []
+
+                # 개별 포지션 매도 조건 체크 (목표 수익률로 전체 청산되지 않은 경우)
+                if holdings:
+                    new_holdings = []
+                    for position in holdings:
+                        profit_pct = (current_price - position['buy_price']) / position['buy_price']
+                        should_sell = False
+                        sell_reason = ''
+
+                        # 최고가 업데이트 (트레일링 스톱용)
+                        if current_price > position['peak_price']:
+                            position['peak_price'] = current_price
+
+                        # 1. 손절선
+                        if self.use_stop_loss and profit_pct <= -self.stop_loss_pct:
                             should_sell = True
-                            sell_reason = 'Trailing Stop'
+                            sell_reason = 'Stop Loss'
 
-                    # 3. 목표 수익률
-                    elif profit_pct >= self.take_profit_pct:
-                        should_sell = True
-                        sell_reason = 'Take Profit'
+                        # 2. 트레일링 스톱
+                        elif self.use_trailing_stop:
+                            drawdown_from_peak = (current_price - position['peak_price']) / position['peak_price']
+                            if drawdown_from_peak <= -self.trailing_stop_pct:
+                                should_sell = True
+                                sell_reason = 'Trailing Stop'
 
-                    if should_sell:
-                        # 매도 실행
-                        sell_amount = position['shares'] * current_price
-                        cash_remaining += sell_amount
+                        if should_sell:
+                            # 매도 실행
+                            sell_amount = position['shares'] * current_price
+                            cash_remaining += sell_amount
 
-                        # 거래 기록
-                        trades.append({
-                            'buy_date': position['buy_date'],
-                            'sell_date': idx,
-                            'buy_price': position['buy_price'],
-                            'sell_price': current_price,
-                            'shares': position['shares'],
-                            'profit_pct': profit_pct * 100,
-                            'profit_amount': sell_amount - (position['shares'] * position['buy_price']),
-                            'sell_reason': sell_reason
-                        })
-                    else:
-                        new_holdings.append(position)
+                            # 거래 기록
+                            trades.append({
+                                'buy_date': position['buy_date'],
+                                'sell_date': idx,
+                                'buy_price': position['buy_price'],
+                                'sell_price': current_price,
+                                'shares': position['shares'],
+                                'profit_pct': profit_pct * 100,
+                                'profit_amount': sell_amount - (position['shares'] * position['buy_price']),
+                                'sell_reason': sell_reason
+                            })
+                        else:
+                            new_holdings.append(position)
 
-                holdings = new_holdings
+                    holdings = new_holdings
 
             # 현재 포트폴리오 가치 = 보유 주식 가치 + 현금
             holdings_value = sum([h['shares'] * current_price for h in holdings])

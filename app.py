@@ -379,19 +379,38 @@ sigma_level = st.sidebar.radio(
 )
 
 # 목표 수익률
-take_profit = st.sidebar.slider(
+use_take_profit = st.sidebar.checkbox(
+    "목표 수익률 사용",
+    value=False,
+    help="""
+    **계좌 전체** 수익률 기준으로 청산합니다.
+
+    💡 작동 방식:
+    - 초기 자본 대비 전체 계좌 가치가 목표 수익률에 도달하면 **모든 포지션을 일괄 청산**합니다
+    - 개별 포지션이 아닌 계좌 전체 수익률 기준이므로 실제 투자 환경과 동일합니다
+    - 실제 증권사 계좌에서는 매도 시 평균 단가로 계산되므로 이 방식이 더 현실적입니다
+
+    📊 예시:
+    - 초기 자본: $10,000
+    - 목표 수익률: 50%
+    - 계좌 전체 가치가 $15,000에 도달하면 모든 주식 매도
+    """
+)
+
+take_profit = st.sidebar.number_input(
     "목표 수익률 (%)",
     min_value=5,
     max_value=900,
     value=900,
     step=5,
+    disabled=not use_take_profit,
     help="""
-    매수가 대비 목표 수익률 달성 시 매도합니다.
+    계좌 전체 수익률이 목표치에 도달하면 모든 포지션을 일괄 매도합니다.
 
-    📊 효과:
-    • 낮은 값 (5-20%): 빠른 수익 실현, 거래 횟수 증가, 큰 상승 추세 놓칠 수 있음
-    • 중간 값 (20-100%): 균형잡힌 전략, 적당한 수익과 거래 빈도
-    • 높은 값 (100%+): 큰 수익 추구, 거래 횟수 감소, 조정 시 미실현 손실 위험
+    📊 권장 범위:
+    • 보수적 (10-30%): 빠른 수익 실현, 안정적 운용
+    • 중립적 (30-100%): 균형잡힌 전략, 적당한 수익 추구
+    • 공격적 (100%+): 큰 수익 추구, 변동성 감수
 
     💡 레버리지 ETF는 변동성이 크므로 높은 목표 수익률도 달성 가능합니다.
     """
@@ -518,6 +537,7 @@ if st.sidebar.button("🔄 분석 시작", type="primary"):
                     position_sizing_method="fixed" if position_sizing_method == "고정 금액" else "dynamic",
                     cash_allocation_pct=cash_allocation_pct if position_sizing_method == "동적 (현금 비율)" else None,
                     sigma_level=sigma_level,
+                    use_take_profit=use_take_profit,
                     take_profit_pct=take_profit,
                     use_ma_exit=use_ma_exit,
                     use_stop_loss=use_stop_loss,
