@@ -1232,6 +1232,148 @@ if 'backtest_results' in st.session_state:
 
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
 
+        # 수익률 분포 시각화
+        st.markdown("---")
+        st.header("수익률 분포 분석")
+
+        # 일일 수익률 데이터
+        returns = strategy.data['Returns'].dropna()
+        returns_pct = returns * 100  # 퍼센트로 변환
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            # 히스토그램 + 정규분포 곡선
+            fig_dist = go.Figure()
+
+            # 히스토그램
+            fig_dist.add_trace(go.Histogram(
+                x=returns_pct,
+                nbinsx=50,
+                name='수익률 분포',
+                marker_color='#2962FF',
+                opacity=0.7,
+                histnorm='probability density'
+            ))
+
+            # 정규분포 곡선
+            mu = returns_pct.mean()
+            sigma = returns_pct.std()
+            x_range = np.linspace(returns_pct.min(), returns_pct.max(), 100)
+            normal_dist = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x_range - mu) / sigma) ** 2)
+
+            fig_dist.add_trace(go.Scatter(
+                x=x_range,
+                y=normal_dist,
+                mode='lines',
+                name='정규분포',
+                line=dict(color='#EF5350', width=3, dash='dash')
+            ))
+
+            # TradingView 스타일 적용
+            fig_dist.update_layout(
+                template='plotly_dark',
+                paper_bgcolor='#131722',
+                plot_bgcolor='#1E222D',
+                font=dict(
+                    family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
+                    color='#FFFFFF'
+                ),
+                xaxis=dict(
+                    title='일일 수익률 (%)',
+                    gridcolor='#2A2E39',
+                    showgrid=True,
+                    zeroline=True,
+                    zerolinecolor='#434651',
+                    zerolinewidth=2
+                ),
+                yaxis=dict(
+                    title='확률 밀도',
+                    gridcolor='#2A2E39',
+                    showgrid=True,
+                    zeroline=False
+                ),
+                hovermode='x unified',
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1,
+                    bgcolor='rgba(30, 34, 45, 0.8)',
+                    bordercolor='#2A2E39',
+                    borderwidth=1
+                ),
+                height=400,
+                margin=dict(l=0, r=0, t=40, b=0)
+            )
+
+            st.plotly_chart(fig_dist, use_container_width=True, config={'displayModeBar': False})
+
+        with col2:
+            st.markdown("**📊 기본 통계량**")
+
+            # 통계량 계산 (numpy로 직접 계산)
+            mean = returns_pct.mean()
+            std = returns_pct.std()
+            # 왜도 (Skewness): E[((X - μ) / σ)^3]
+            skewness = ((returns_pct - mean) / std) ** 3
+            skewness = skewness.mean()
+            # 첨도 (Kurtosis): E[((X - μ) / σ)^4] - 3 (excess kurtosis)
+            kurtosis_val = ((returns_pct - mean) / std) ** 4
+            kurtosis_val = kurtosis_val.mean() - 3
+
+            stats_df = pd.DataFrame({
+                '지표': [
+                    '평균',
+                    '중앙값',
+                    '표준편차',
+                    '최솟값',
+                    '최댓값',
+                    '왜도 (Skewness)',
+                    '첨도 (Kurtosis)'
+                ],
+                '값': [
+                    f"{returns_pct.mean():.3f}%",
+                    f"{returns_pct.median():.3f}%",
+                    f"{returns_pct.std():.3f}%",
+                    f"{returns_pct.min():.3f}%",
+                    f"{returns_pct.max():.3f}%",
+                    f"{skewness:.3f}",
+                    f"{kurtosis_val:.3f}"
+                ]
+            })
+
+            st.dataframe(stats_df, use_container_width=True, hide_index=True)
+
+            st.markdown("**📈 분위수**")
+            quantiles = returns_pct.quantile([0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
+            quantiles_df = pd.DataFrame({
+                '분위수': ['1%', '5%', '25%', '50%', '75%', '95%', '99%'],
+                '수익률': [f"{q:.3f}%" for q in quantiles.values]
+            })
+            st.dataframe(quantiles_df, use_container_width=True, hide_index=True)
+
+        # 설명
+        with st.expander("📖 수익률 분포 해석"):
+            st.markdown("""
+            ### 왜도 (Skewness)
+            - **0에 가까움**: 대칭적 분포
+            - **양수 (+)**: 오른쪽 꼬리가 긴 분포 (큰 양의 수익률 발생 가능성)
+            - **음수 (-)**: 왼쪽 꼬리가 긴 분포 (큰 손실 발생 가능성)
+
+            ### 첨도 (Kurtosis)
+            - **0에 가까움**: 정규분포와 유사한 꼬리
+            - **양수 (+)**: 정규분포보다 두꺼운 꼬리 (극단적 사건 발생 가능성 높음)
+            - **음수 (-)**: 정규분포보다 얇은 꼬리
+
+            ### 분위수
+            - **1%, 5%**: 하방 리스크 (VaR 개념)
+            - **95%, 99%**: 상방 잠재력
+
+            💡 **실전 활용**: 왜도가 음수이고 첨도가 높으면 큰 손실이 발생할 가능성이 있으므로 위험 관리가 중요합니다.
+            """)
+
     # 탭 4: 거래 내역
     with tab4:
         st.header("거래 내역")
@@ -1305,20 +1447,13 @@ else:
     st.info("👈 왼쪽 사이드바에서 종목과 설정을 입력한 후 '분석 시작' 버튼을 클릭하세요.")
 
     # 빠른 시작 가이드
-    col1, col2 = st.columns([2, 1])
-
-    with col1:
-        st.subheader("🚀 빠른 시작")
-        st.markdown("""
-        1. **종목 티커** 입력 (예: QLD, SOXL, TQQQ, SPY)
-        2. **백테스트 설정** 조정 (기본값도 좋습니다)
-        3. **분석 시작** 클릭
-        4. **결과 확인** 및 CSV 다운로드
-        """)
-
-    with col2:
-        st.subheader("📊 데모 영상")
-        st.info("곧 제공 예정")
+    st.subheader("🚀 빠른 시작")
+    st.markdown("""
+    1. **종목 티커** 입력 (예: QLD, SOXL, TQQQ, SPY)
+    2. **백테스트 설정** 조정 (기본값도 좋습니다)
+    3. **분석 시작** 클릭
+    4. **결과 확인** 및 CSV 다운로드
+    """)
 
     st.markdown("---")
 
