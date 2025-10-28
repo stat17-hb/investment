@@ -1374,6 +1374,268 @@ if 'backtest_results' in st.session_state:
             💡 **실전 활용**: 왜도가 음수이고 첨도가 높으면 큰 손실이 발생할 가능성이 있으므로 위험 관리가 중요합니다.
             """)
 
+        # Tail Risk 분석
+        st.markdown("---")
+        st.header("📉 Tail Risk 분석")
+
+        st.markdown("""
+        **Tail Risk**는 확률분포의 양 끝(꼬리)에서 발생하는 극단적이고 드문 사건이 야기하는 위험을 의미합니다.
+
+        대부분의 손익은 평균 근처에서 발생하지만, 가끔 예측 불가능한 큰 폭락이나 폭등이 발생할 수 있습니다.
+        """)
+
+        # Tail Risk 지표 3열로 표시
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown("### 📊 VaR (Value at Risk)")
+            st.markdown("특정 신뢰수준에서 예상되는 최대 손실")
+
+            var_data = pd.DataFrame({
+                '신뢰수준': ['95% VaR', '99% VaR'],
+                '일일 손실률': [
+                    f"{backtest_results['var_95']:.3f}%",
+                    f"{backtest_results['var_99']:.3f}%"
+                ],
+                '예상 손실액': [
+                    f"₩{abs(backtest_results['var_95'] * backtest_results['final_value'] / 100):,.0f}",
+                    f"₩{abs(backtest_results['var_99'] * backtest_results['final_value'] / 100):,.0f}"
+                ]
+            })
+            st.dataframe(var_data, use_container_width=True, hide_index=True)
+
+            st.caption("💡 95% VaR: 20일 중 1일은 이보다 큰 손실 발생")
+            st.caption("💡 99% VaR: 100일 중 1일은 이보다 큰 손실 발생")
+
+        with col2:
+            st.markdown("### 📉 CVaR (Expected Shortfall)")
+            st.markdown("VaR을 초과하는 손실의 평균 (더 보수적인 지표)")
+
+            cvar_data = pd.DataFrame({
+                '신뢰수준': ['95% CVaR', '99% CVaR'],
+                '평균 손실률': [
+                    f"{backtest_results['cvar_95']:.3f}%",
+                    f"{backtest_results['cvar_99']:.3f}%"
+                ],
+                '예상 손실액': [
+                    f"₩{abs(backtest_results['cvar_95'] * backtest_results['final_value'] / 100):,.0f}",
+                    f"₩{abs(backtest_results['cvar_99'] * backtest_results['final_value'] / 100):,.0f}"
+                ]
+            })
+            st.dataframe(cvar_data, use_container_width=True, hide_index=True)
+
+            st.caption("💡 CVaR은 극단적 손실의 평균을 측정합니다")
+            st.caption("💡 VaR보다 극단적 사건을 더 잘 반영합니다")
+
+        with col3:
+            st.markdown("### ⚖️ Tail Ratio & 최악의 손실")
+
+            # Tail Ratio
+            tail_ratio = backtest_results['tail_ratio']
+            tail_color = "🟢" if tail_ratio > 1 else "🔴"
+            st.metric(
+                "Tail Ratio",
+                f"{tail_ratio:.3f}",
+                delta="상방 > 하방" if tail_ratio > 1 else "하방 > 상방",
+                delta_color="normal" if tail_ratio > 1 else "inverse"
+            )
+            st.caption(f"{tail_color} 상위 5% 수익 / 하위 5% 손실 비율")
+
+            # 최악의 손실
+            st.markdown("**최악의 손실**")
+            worst_data = pd.DataFrame({
+                '기간': ['최악 1일', '최악 5일 평균', '최악 10일 평균'],
+                '손실률': [
+                    f"{backtest_results['worst_1day']:.3f}%",
+                    f"{backtest_results['worst_5day']:.3f}%",
+                    f"{backtest_results['worst_10day']:.3f}%"
+                ]
+            })
+            st.dataframe(worst_data, use_container_width=True, hide_index=True)
+
+        # 극단 이벤트 시각화
+        st.markdown("---")
+        st.subheader("🔴 극단적 손실 이벤트 시각화")
+
+        # 일일 수익률 데이터
+        returns_series = strategy.data['Returns'].dropna() * 100
+
+        # VaR 임계값
+        var_95_threshold = backtest_results['var_95']
+        var_99_threshold = backtest_results['var_99']
+
+        # 극단 이벤트 분류
+        extreme_loss = returns_series[returns_series <= var_95_threshold]
+        severe_loss = returns_series[returns_series <= var_99_threshold]
+        extreme_gain = returns_series[returns_series >= abs(var_95_threshold)]
+
+        # 시계열 차트
+        fig_extreme = go.Figure()
+
+        # 전체 수익률
+        fig_extreme.add_trace(go.Scatter(
+            x=returns_series.index,
+            y=returns_series,
+            mode='lines',
+            name='일일 수익률',
+            line=dict(color='#6C757D', width=1),
+            opacity=0.5
+        ))
+
+        # VaR 95% 라인
+        fig_extreme.add_hline(
+            y=var_95_threshold,
+            line_dash="dash",
+            line_color="#FFA500",
+            annotation_text=f"95% VaR ({var_95_threshold:.2f}%)",
+            annotation_position="right"
+        )
+
+        # VaR 99% 라인
+        fig_extreme.add_hline(
+            y=var_99_threshold,
+            line_dash="dash",
+            line_color="#DC3545",
+            annotation_text=f"99% VaR ({var_99_threshold:.2f}%)",
+            annotation_position="right"
+        )
+
+        # 극단 손실 이벤트 하이라이트 (VaR 95% 위반)
+        if not extreme_loss.empty:
+            fig_extreme.add_trace(go.Scatter(
+                x=extreme_loss.index,
+                y=extreme_loss,
+                mode='markers',
+                name='극단 손실 (5% 꼬리)',
+                marker=dict(
+                    color='#FFA500',
+                    size=8,
+                    symbol='x',
+                    line=dict(width=2)
+                )
+            ))
+
+        # 심각한 손실 이벤트 하이라이트 (VaR 99% 위반)
+        if not severe_loss.empty:
+            fig_extreme.add_trace(go.Scatter(
+                x=severe_loss.index,
+                y=severe_loss,
+                mode='markers',
+                name='심각한 손실 (1% 꼬리)',
+                marker=dict(
+                    color='#DC3545',
+                    size=12,
+                    symbol='x',
+                    line=dict(width=2)
+                )
+            ))
+
+        # 극단 이익 이벤트
+        if not extreme_gain.empty:
+            fig_extreme.add_trace(go.Scatter(
+                x=extreme_gain.index,
+                y=extreme_gain,
+                mode='markers',
+                name='극단 이익 (5% 꼬리)',
+                marker=dict(
+                    color='#26A69A',
+                    size=8,
+                    symbol='circle',
+                    line=dict(width=1)
+                )
+            ))
+
+        # 레이아웃
+        fig_extreme.update_layout(
+            template='plotly_dark',
+            paper_bgcolor='#131722',
+            plot_bgcolor='#1E222D',
+            font=dict(
+                family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
+                color='#FFFFFF'
+            ),
+            xaxis=dict(
+                title='날짜',
+                gridcolor='#2A2E39',
+                showgrid=True
+            ),
+            yaxis=dict(
+                title='일일 수익률 (%)',
+                gridcolor='#2A2E39',
+                showgrid=True,
+                zeroline=True,
+                zerolinecolor='#434651',
+                zerolinewidth=2
+            ),
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                bgcolor='rgba(30, 34, 45, 0.8)',
+                bordercolor='#2A2E39',
+                borderwidth=1
+            ),
+            height=500,
+            margin=dict(l=0, r=0, t=40, b=0)
+        )
+
+        st.plotly_chart(fig_extreme, use_container_width=True, config={'displayModeBar': False})
+
+        # 통계 요약
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("극단 손실 이벤트", f"{len(extreme_loss)}회",
+                     help="VaR 95%를 초과하는 손실 발생 일수")
+
+        with col2:
+            st.metric("심각한 손실 이벤트", f"{len(severe_loss)}회",
+                     help="VaR 99%를 초과하는 손실 발생 일수")
+
+        with col3:
+            st.metric("극단 이익 이벤트", f"{len(extreme_gain)}회",
+                     help="상위 5% 이상의 큰 이익 발생 일수")
+
+        with col4:
+            event_ratio = len(extreme_gain) / len(extreme_loss) if len(extreme_loss) > 0 else 0
+            st.metric("이벤트 비율", f"{event_ratio:.2f}",
+                     help="극단 이익 이벤트 / 극단 손실 이벤트")
+
+        # Tail Risk 전략 가이드
+        with st.expander("📖 Tail Risk 관리 전략"):
+            st.markdown("""
+            ### VaR (Value at Risk)
+            - **정의**: 정상적인 시장 조건에서 특정 신뢰수준(95%, 99%)으로 예상되는 최대 손실
+            - **활용**: 일일 위험 한도 설정, 포지션 사이징
+
+            ### CVaR (Conditional VaR / Expected Shortfall)
+            - **정의**: VaR을 초과하는 손실이 발생했을 때 예상되는 평균 손실
+            - **활용**: VaR보다 보수적이며, 극단적 시나리오 대비에 유용
+
+            ### Tail Ratio
+            - **정의**: 상방 잠재력(상위 5%) / 하방 리스크(하위 5%)
+            - **해석**:
+              - **1 이상**: 상방 잠재력이 하방 리스크보다 큼 (긍정적)
+              - **1 미만**: 하방 리스크가 더 큼 (주의 필요)
+
+            ### Tail Hedge 전략
+            1. **포지션 사이징**: VaR/CVaR 기반으로 포지션 크기 조절
+            2. **손절선 설정**: CVaR 수준에 손절선 배치
+            3. **분산 투자**: 상관관계 낮은 자산으로 극단 리스크 분산
+            4. **옵션 활용**: 풋옵션으로 하방 보호 (고급)
+
+            ### 실전 활용 예시
+            - **CVaR 99%가 -5%**: 최악의 1% 상황에서 평균 -5% 손실 예상
+            - **대응**: 최대 허용 손실을 계좌의 1-2%로 제한하여 포지션 조절
+            - **예**: 1,000만원 계좌에서 CVaR -5%면 최악 시 -50만원 손실
+              → 포지션을 200만원 이하로 제한 (최대 손실 10만원)
+
+            💡 **핵심**: Tail Risk는 완전히 제거할 수 없지만, 측정하고 관리함으로써 극단적 손실을 제한할 수 있습니다.
+            """)
+
     # 탭 4: 거래 내역
     with tab4:
         st.header("거래 내역")

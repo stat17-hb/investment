@@ -357,6 +357,43 @@ class Backtester:
         calmar_ratio = cagr / abs(max_drawdown) if max_drawdown < 0 else 0
         buy_hold_calmar = buy_hold_cagr / abs(buy_hold_mdd) if buy_hold_mdd < 0 else 0
 
+        # === Tail Risk 지표 계산 ===
+        # VaR (Value at Risk) - 하위 분위수 (손실 기준)
+        var_95 = daily_returns.quantile(0.05) * 100 if len(daily_returns) > 0 else 0  # 95% 신뢰수준
+        var_99 = daily_returns.quantile(0.01) * 100 if len(daily_returns) > 0 else 0  # 99% 신뢰수준
+
+        # CVaR (Conditional VaR) / ES (Expected Shortfall) - VaR을 초과하는 손실의 평균
+        if len(daily_returns) > 0:
+            cvar_95 = daily_returns[daily_returns <= daily_returns.quantile(0.05)].mean() * 100
+            cvar_99 = daily_returns[daily_returns <= daily_returns.quantile(0.01)].mean() * 100
+        else:
+            cvar_95 = 0
+            cvar_99 = 0
+
+        # Tail Ratio - 상방 잠재력 / 하방 리스크 비율
+        if len(daily_returns) > 0:
+            upper_tail = daily_returns.quantile(0.95)  # 상위 5%
+            lower_tail = daily_returns.quantile(0.05)  # 하위 5%
+            tail_ratio = abs(upper_tail / lower_tail) if lower_tail != 0 else 0
+        else:
+            tail_ratio = 0
+
+        # 최악의 N일 수익률
+        worst_days = daily_returns.nsmallest(10) * 100 if len(daily_returns) > 0 else pd.Series([0])
+        worst_1day = worst_days.iloc[0] if len(worst_days) > 0 else 0
+        worst_5day = worst_days.iloc[:5].mean() if len(worst_days) >= 5 else 0
+        worst_10day = worst_days.mean() if len(worst_days) >= 10 else 0
+
+        # Skewness와 Kurtosis (이미 계산되지 않았다면)
+        if len(daily_returns) > 0:
+            returns_mean = daily_returns.mean()
+            returns_std = daily_returns.std()
+            skewness = ((daily_returns - returns_mean) / returns_std).pow(3).mean() if returns_std > 0 else 0
+            kurtosis = ((daily_returns - returns_mean) / returns_std).pow(4).mean() - 3 if returns_std > 0 else 0
+        else:
+            skewness = 0
+            kurtosis = 0
+
         # Buy & Hold 총 매수금액 계산
         buy_hold_total_invested = sum([bp['amount'] for bp in buy_hold_buy_points]) if buy_hold_buy_points else 0
 
@@ -403,7 +440,18 @@ class Backtester:
             'buy_hold_stats': buy_hold_stats,  # 전체 Buy & Hold 통계 (trades 포함)
             'max_drawdown_pct': max_drawdown,
             'portfolio_df': portfolio_df,
-            'trades_df': trades_df
+            'trades_df': trades_df,
+            # Tail Risk 지표
+            'var_95': var_95,
+            'var_99': var_99,
+            'cvar_95': cvar_95,
+            'cvar_99': cvar_99,
+            'tail_ratio': tail_ratio,
+            'worst_1day': worst_1day,
+            'worst_5day': worst_5day,
+            'worst_10day': worst_10day,
+            'skewness': skewness,
+            'kurtosis': kurtosis
         }
 
     def calculate_buy_and_hold(self) -> dict:
