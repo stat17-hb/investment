@@ -511,7 +511,7 @@ class Backtester:
                     buy_trading_days.append(mid_days.index[0])
                 else:
                     # 10~15일에 거래일이 없으면 가장 가까운 날 선택
-                    closest_idx = (group.index.day - 12.5).abs().argmin()
+                    closest_idx = np.abs(group.index.day - 12.5).argmin()
                     buy_trading_days.append(group.index[closest_idx])
 
                 if len(buy_trading_days) >= n_months:
