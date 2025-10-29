@@ -493,11 +493,29 @@ buy_hold_splits = st.sidebar.number_input(
     max_value=240,
     value=default_months,
     step=1,
-    help="Buy & Hold 전략 시 n개월 동안 매월 첫 거래일에 분할 매수 (Dollar Cost Averaging)"
+    help="Buy & Hold 전략 시 n개월 동안 매월 지정된 시점에 분할 매수 (Dollar Cost Averaging)"
+)
+
+# Buy & Hold 매수 시점 선택
+buy_hold_timing = st.sidebar.selectbox(
+    "매수 시점",
+    options=["first", "mid", "last"],
+    format_func=lambda x: {
+        "first": "매월 첫 거래일",
+        "mid": "매월 중순 (10~15일)",
+        "last": "매월 마지막 거래일"
+    }[x],
+    index=0,
+    help="분할 매수 시 월 중 어느 시점에 매수할지 선택합니다"
 )
 
 if buy_hold_splits > 1:
-    st.sidebar.info(f"💡 {buy_hold_splits}개월 동안 매월 첫 거래일에 균등 매수합니다.")
+    timing_text = {
+        "first": "매월 첫 거래일",
+        "mid": "매월 중순 (10~15일)",
+        "last": "매월 마지막 거래일"
+    }[buy_hold_timing]
+    st.sidebar.info(f"💡 {buy_hold_splits}개월 동안 {timing_text}에 균등 매수합니다.")
 
 # Buy & Hold 위험 관리 적용
 buy_hold_use_risk_mgmt = st.sidebar.checkbox(
@@ -546,7 +564,8 @@ if st.sidebar.button("🔄 분석 시작", type="primary"):
                     trailing_stop_pct=trailing_stop_pct,
                     cooldown_months=cooldown_months,
                     buy_hold_splits=buy_hold_splits,
-                    buy_hold_use_risk_mgmt=buy_hold_use_risk_mgmt
+                    buy_hold_use_risk_mgmt=buy_hold_use_risk_mgmt,
+                    buy_hold_timing=buy_hold_timing
                 )
                 backtest_results = backtester.run()
 

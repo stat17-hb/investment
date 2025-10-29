@@ -31,7 +31,8 @@ class Backtester:
         trailing_stop_pct: float = 10.0,
         cooldown_months: int = 0,
         buy_hold_splits: int = 1,
-        buy_hold_use_risk_mgmt: bool = False
+        buy_hold_use_risk_mgmt: bool = False,
+        buy_hold_timing: str = "first"
     ):
         """
         Args:
@@ -51,6 +52,7 @@ class Backtester:
             cooldown_months: 손절 후 매수 대기 기간 (개월)
             buy_hold_splits: Buy & Hold 분할 매수 횟수
             buy_hold_use_risk_mgmt: Buy & Hold에도 위험 관리 적용 여부
+            buy_hold_timing: Buy & Hold 매수 시점 ("first": 첫 거래일, "mid": 중순, "last": 마지막 거래일)
         """
         self.data = data.copy()
         self.initial_capital = initial_capital
@@ -68,6 +70,7 @@ class Backtester:
         self.cooldown_months = cooldown_months
         self.buy_hold_splits = buy_hold_splits
         self.buy_hold_use_risk_mgmt = buy_hold_use_risk_mgmt
+        self.buy_hold_timing = buy_hold_timing
 
         self.positions = []
         self.trades = []
@@ -459,7 +462,10 @@ class Backtester:
         Buy & Hold 전략 정확한 계산 (월별 분할 매수 + 선택적 위험 관리)
 
         전략:
-        - n개월 동안 매월 첫 거래일에 분할 매수
+        - n개월 동안 매월 지정된 시점에 분할 매수
+          * first: 매월 첫 거래일
+          * mid: 매월 중순 (10일~15일 사이)
+          * last: 매월 마지막 거래일
         - 각 월에 (초기 자본 / n) 만큼 매수
         - 선택적으로 위험 관리 적용 (손절선, 트레일링 스톱, 목표 수익률)
         - 실제 주식 수량 기반 계산
@@ -476,21 +482,51 @@ class Backtester:
         """
         n_months = self.buy_hold_splits
 
-        # 매월 첫 거래일 찾기
+        # 매수 시점에 따라 매수일 찾기
         data_with_month = self.data.copy()
         data_with_month['year_month'] = data_with_month.index.to_period('M')
 
-        # 각 월의 첫 거래일 인덱스 찾기
-        first_trading_days = []
-        seen_months = set()
+        # 각 월의 매수 거래일 인덱스 찾기
+        buy_trading_days = []
 
-        for idx in data_with_month.index:
-            year_month = data_with_month.loc[idx, 'year_month']
-            if year_month not in seen_months:
-                first_trading_days.append(idx)
-                seen_months.add(year_month)
-                if len(first_trading_days) >= n_months:
+        if self.buy_hold_timing == "first":
+            # (1) 매월 첫 거래일
+            seen_months = set()
+            for idx in data_with_month.index:
+                year_month = data_with_month.loc[idx, 'year_month']
+                if year_month not in seen_months:
+                    buy_trading_days.append(idx)
+                    seen_months.add(year_month)
+                    if len(buy_trading_days) >= n_months:
+                        break
+
+        elif self.buy_hold_timing == "mid":
+            # (2) 매월 중순 (10일~15일 사이의 거래일)
+            month_groups = data_with_month.groupby('year_month')
+            for year_month, group in month_groups:
+                # 해당 월의 10일~15일 사이 거래일 찾기
+                mid_days = group[(group.index.day >= 10) & (group.index.day <= 15)]
+                if not mid_days.empty:
+                    # 중순 거래일 중 가장 빠른 날
+                    buy_trading_days.append(mid_days.index[0])
+                else:
+                    # 10~15일에 거래일이 없으면 가장 가까운 날 선택
+                    closest_idx = (group.index.day - 12.5).abs().argmin()
+                    buy_trading_days.append(group.index[closest_idx])
+
+                if len(buy_trading_days) >= n_months:
                     break
+
+        elif self.buy_hold_timing == "last":
+            # (3) 매월 마지막 거래일
+            month_groups = data_with_month.groupby('year_month')
+            for year_month, group in month_groups:
+                # 해당 월의 마지막 거래일
+                buy_trading_days.append(group.index[-1])
+                if len(buy_trading_days) >= n_months:
+                    break
+
+        first_trading_days = buy_trading_days
 
         # 실제로 매수할 월 수 (데이터가 부족할 수 있음)
         actual_n_months = len(first_trading_days)
