@@ -274,6 +274,9 @@ with st.expander("📖 표준편차 매매법이란?", expanded=False):
     """)
 
 # 사이드바 설정
+# 최상단 분석 시작 버튼
+analyze_button_top = st.sidebar.button("🔄 분석 시작", type="primary", key="analyze_top")
+
 st.sidebar.header("⚙️ 설정")
 
 # 종목 입력
@@ -525,7 +528,9 @@ buy_hold_use_risk_mgmt = st.sidebar.checkbox(
 )
 
 # 데이터 로드 버튼
-if st.sidebar.button("🔄 분석 시작", type="primary"):
+analyze_button_bottom = st.sidebar.button("🔄 분석 시작", type="primary", key="analyze_bottom")
+
+if analyze_button_top or analyze_button_bottom:
     try:
         with st.spinner(f"{ticker} 데이터를 가져오는 중..."):
             # 캐싱된 함수로 데이터 가져오기
