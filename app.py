@@ -273,6 +273,81 @@ with st.expander("📖 표준편차 매매법이란?", expanded=False):
     레버리지 ETF는 높은 변동성과 시간 가치 감소 위험이 있으므로 충분히 이해하고 투자하시기 바랍니다.
     """)
 
+# 표준편차 매수 로직 상세 설명
+with st.expander("🔬 표준편차 매수 로직 상세", expanded=False):
+    st.markdown("""
+    ### 📊 표준편차 계산 방식
+
+    코드베이스에서 사용하는 표준편차 기반 매수 결정 로직을 설명합니다.
+
+    #### 1️⃣ 표준편차 계산 (strategy.py:50-73)
+
+    ```python
+    # 일일 수익률의 롤링 표준편차 (기본 252일 = 1년)
+    Daily_Std_Dev = Returns.rolling(window=252).std()
+
+    # 연율화 표준편차 (연간 변동성)
+    Std_Dev = Daily_Std_Dev × √252
+
+    # 표준편차를 가격으로 환산
+    Std_Dev_Price = Close × Daily_Std_Dev
+
+    # 매수 목표 가격 계산
+    Buy_1Sigma = Close - Std_Dev_Price
+    Buy_2Sigma = Close - (2 × Std_Dev_Price)
+    ```
+
+    #### 2️⃣ 매수 시그널 생성 (strategy.py:90-124)
+
+    **핵심 원칙: Lookahead Bias 방지**
+    - T일의 매수 결정은 **T-1일까지의 데이터**로만 이루어집니다
+    - 미래 데이터를 사용하지 않아 실제 거래 가능한 전략입니다
+
+    ```python
+    # T-1일까지의 표준편차 사용 (shift(1) 적용)
+    daily_std_lagged = Daily_Std_Dev.shift(1)
+
+    # 1σ 매수 시그널: 오늘 수익률이 어제까지의 1σ 이하로 하락
+    condition_1sigma = (Returns ≤ -daily_std_lagged)
+
+    # 2σ 매수 시그널: 오늘 수익률이 어제까지의 2σ 이하로 하락
+    condition_2sigma = (Returns ≤ -2 × daily_std_lagged)
+    ```
+
+    #### 3️⃣ 매수 조건 비교
+
+    | 시그널 유형 | 조건 | 의미 |
+    |------------|------|------|
+    | **1σ 매수** | `Returns ≤ -Daily_Std_Dev(T-1)` | 전일 표준편차 이상 하락 시 매수 |
+    | **2σ 매수** | `Returns ≤ -2 × Daily_Std_Dev(T-1)` | 전일 표준편차의 2배 이상 하락 시 매수 |
+
+    #### 4️⃣ 실전 예시
+
+    **상황:**
+    - 어제(T-1일)까지의 일일 표준편차: **3.0%**
+    - 오늘(T일) 실제 수익률: **-3.5%**
+
+    **판단:**
+    - -3.5% ≤ -3.0% → ✅ **1σ 매수 신호 발생**
+    - -3.5% > -6.0% → ❌ 2σ 매수 신호는 미발생
+
+    **실행:**
+    - T일 장 마감 후 종가를 확인
+    - 어제까지의 변동성 기준으로 충분히 떨어졌다고 판단
+    - 종가 또는 시간외 거래로 매수 실행
+
+    ---
+
+    ### 🎯 전략의 핵심 강점
+
+    1. **통계적 신뢰성**: 정규분포 이론에 기반한 객관적 판단
+    2. **미래 데이터 미사용**: Lookahead Bias가 없어 실전 적용 가능
+    3. **변동성 활용**: 과도한 하락을 매수 기회로 전환
+    4. **체계적 접근**: 감정을 배제한 기계적 매매
+
+    💡 **이 로직은 strategy.py에 구현되어 있으며, 백테스트 시 자동으로 적용됩니다.**
+    """)
+
 # 사이드바 설정
 # 최상단 분석 시작 버튼
 analyze_button_top = st.sidebar.button("🔄 분석 시작", type="primary", key="analyze_top")
