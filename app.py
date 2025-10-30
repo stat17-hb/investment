@@ -708,9 +708,12 @@ if 'backtest_results' in st.session_state:
         with col1:
             price_change = ((current_stats['current_price'] - current_stats['ma_20']) / current_stats['ma_20']) * 100
             color = "#26A69A" if price_change > 0 else "#EF5350"
+            # 마지막 데이터 날짜 가져오기
+            last_date = strategy.data.index[-1]
+            date_str = last_date.strftime('%Y-%m-%d') if hasattr(last_date, 'strftime') else str(last_date)
             st.markdown(f"""
             <div class='metric-card'>
-                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>현재 가격</p>
+                <p style='color: #E8E8E8; margin: 0; font-size: 14px;'>현재 가격 <span style='color: #9E9E9E; font-size: 12px;'>({date_str})</span></p>
                 <p style='color: #FFFFFF; font-size: 36px; font-weight: 700; margin: 10px 0;'>
                     ${current_stats['current_price']:.2f}
                 </p>
