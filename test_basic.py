@@ -1,59 +1,61 @@
-"""
-기본 기능 테스트
-"""
-import sys
+"""기본 동작을 검증하는 단위 테스트"""
+import numpy as np
+import pandas as pd
+import pytest
 
-try:
-    from data_fetcher import DataFetcher
-    from strategy import StandardDeviationStrategy
-    from backtest import Backtester
+from backtest import Backtester
+from strategy import StandardDeviationStrategy
 
-    print("✅ 모든 모듈 임포트 성공!")
 
-    # SOXL 데이터 가져오기 테스트
-    print("\n📊 SOXL 데이터 가져오기 중...")
-    fetcher = DataFetcher("SOXL")
-    data = fetcher.get_historical_data(period="1y")
-    print(f"✅ 데이터 로드 성공! {len(data)}일치 데이터")
+@pytest.fixture
+def synthetic_price_data():
+    """월별 납입금 테스트에 사용할 결정적인 가격 데이터"""
+    trading_days = pd.bdate_range("2020-01-01", periods=260)
 
-    # 전략 적용
-    print("\n📈 표준편차 매매 전략 적용 중...")
-    strategy = StandardDeviationStrategy(data, lookback_period=252)
-    stats = strategy.get_current_stats()
+    rng = np.random.default_rng(42)
+    daily_changes = rng.normal(0, 0.01, size=len(trading_days))
+    # 몇몇 구간에 큰 하락을 추가해 매수 시그널이 발생하도록 유도
+    drop_indices = [40, 80, 120, 160, 200, 240]
+    for idx in drop_indices:
+        if idx < len(daily_changes):
+            daily_changes[idx] = -0.09
 
-    print(f"✅ 전략 적용 성공!")
-    print(f"\n📋 현재 통계:")
-    print(f"  - 현재가: ${stats['current_price']:.2f}")
-    print(f"  - 표준편차: {stats['std_dev_pct']:.2f}%")
-    print(f"  - 1σ 매수가: ${stats['buy_1sigma_price']:.2f}")
-    print(f"  - 2σ 매수가: ${stats['buy_2sigma_price']:.2f}")
-    print(f"  - RSI: {stats['rsi']:.1f}")
+    prices = 100 * np.cumprod(1 + daily_changes)
 
-    # 백테스트
-    print("\n🔄 백테스트 실행 중...")
+    df = pd.DataFrame(
+        {
+            "Open": prices,
+            "High": prices,
+            "Low": prices,
+            "Close": prices,
+            "Volume": 1_000_000,
+        },
+        index=trading_days,
+    )
+    return df
+
+
+def test_backtester_tracks_monthly_contributions(synthetic_price_data):
+    strategy = StandardDeviationStrategy(synthetic_price_data, lookback_period=20)
     backtester = Backtester(
         data=strategy.data,
-        initial_capital=10000,
-        position_size=1000,
+        initial_capital=10_000,
+        position_sizing_method="fixed",
+        position_size=1_000,
         sigma_level=1,
-        take_profit_pct=10
+        monthly_contribution=1_000,
+        buy_hold_splits=12,
+        buy_hold_timing="first",
     )
+
     results = backtester.run()
 
-    print(f"✅ 백테스트 완료!")
-    print(f"\n📊 백테스트 결과:")
-    print(f"  - 총 수익률: {results['total_return_pct']:.2f}%")
-    print(f"  - Buy & Hold: {results['buy_hold_return_pct']:.2f}%")
-    print(f"  - 총 거래: {results['total_trades']}회")
-    print(f"  - 승률: {results['win_rate']:.1f}%")
-    print(f"  - 평균 수익률: {results['avg_profit_pct']:.2f}%")
-    print(f"  - 최대 낙폭: {results['max_drawdown_pct']:.2f}%")
+    unique_months = strategy.data.index.to_period("M").nunique()
+    expected_total = 10_000 + 1_000 * unique_months
 
-    print("\n✅ 모든 테스트 통과!")
-    print("\n🚀 대시보드 실행: streamlit run app.py")
+    assert results["total_contributed"] == pytest.approx(expected_total)
+    assert results["buy_hold_total_contributed"] == pytest.approx(expected_total)
 
-except Exception as e:
-    print(f"❌ 오류 발생: {str(e)}")
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
+    # 전략/Buy & Hold 모두에서 실제 매수가 발생했는지 확인
+    assert results["buy_count"] > 0
+    assert results["buy_hold_buy_count"] == backtester.buy_hold_splits

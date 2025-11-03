@@ -32,7 +32,8 @@ class Backtester:
         cooldown_months: int = 0,
         buy_hold_splits: int = 1,
         buy_hold_use_risk_mgmt: bool = False,
-        buy_hold_timing: str = "first"
+        buy_hold_timing: str = "first",
+        monthly_contribution: float = 0.0
     ):
         """
         Args:
@@ -53,6 +54,7 @@ class Backtester:
             buy_hold_splits: Buy & Hold 분할 매수 횟수
             buy_hold_use_risk_mgmt: Buy & Hold에도 위험 관리 적용 여부
             buy_hold_timing: Buy & Hold 매수 시점 ("first": 첫 거래일, "mid": 중순, "last": 마지막 거래일)
+            monthly_contribution: 매월 첫 거래일에 계좌에 추가되는 납입금 (기본 0)
         """
         self.data = data.copy()
         self.initial_capital = initial_capital
@@ -71,6 +73,7 @@ class Backtester:
         self.buy_hold_splits = buy_hold_splits
         self.buy_hold_use_risk_mgmt = buy_hold_use_risk_mgmt
         self.buy_hold_timing = buy_hold_timing
+        self.monthly_contribution = monthly_contribution
 
         self.positions = []
         self.trades = []
@@ -78,17 +81,30 @@ class Backtester:
         self.total_invested = 0  # 총 매수 금액
         self.buy_count = 0  # 총 매수 횟수
         self.last_stop_loss_date = None  # 마지막 손절 발생 일자
+        self.total_contributed = self.initial_capital  # 누적 납입 자본
 
     def run(self) -> dict:
         """백테스트 실행"""
+        self.total_contributed = self.initial_capital
         cash = self.initial_capital
         holdings = []  # (매수가격, 수량, 매수일자)
+        last_contribution_month = None
 
         for row in self.data.itertuples():
             idx = row.Index
             current_price = row.Close
             signal = row.Signal
             ma_20 = row.MA_20
+
+            current_month = idx.to_period('M') if isinstance(idx, pd.Timestamp) else None
+            if (
+                self.monthly_contribution > 0
+                and current_month is not None
+                and current_month != last_contribution_month
+            ):
+                cash += self.monthly_contribution
+                self.total_contributed += self.monthly_contribution
+                last_contribution_month = current_month
 
             # 매수 조건 체크
             buy_signal = False
@@ -133,7 +149,8 @@ class Backtester:
             if self.use_take_profit and holdings:
                 holdings_value = sum([h['shares'] * current_price for h in holdings])
                 total_value = cash + holdings_value
-                account_profit_pct = (total_value - self.initial_capital) / self.initial_capital
+                base_capital = self.total_contributed if self.total_contributed > 0 else self.initial_capital
+                account_profit_pct = (total_value - base_capital) / base_capital
 
                 # 계좌 전체 수익률이 목표치에 도달하면 모든 포지션 일괄 청산
                 if account_profit_pct >= self.take_profit_pct:
@@ -262,7 +279,8 @@ class Backtester:
         portfolio_df = pd.DataFrame(self.portfolio_value)
         final_value = portfolio_df['total_value'].iloc[-1]
 
-        total_return = (final_value - self.initial_capital) / self.initial_capital * 100
+        contributed_capital = self.total_contributed if self.total_contributed > 0 else self.initial_capital
+        total_return = (final_value - contributed_capital) / contributed_capital * 100
 
         # 거래 통계
         trades_df = pd.DataFrame(self.trades) if self.trades else pd.DataFrame()
@@ -299,8 +317,8 @@ class Backtester:
 
         # 연평균 복리 수익률 (CAGR)
         years = len(self.data) / 252  # 252 거래일 = 1년
-        if years > 0 and final_value > 0:
-            cagr = (pow(final_value / self.initial_capital, 1 / years) - 1) * 100
+        if years > 0 and final_value > 0 and contributed_capital > 0:
+            cagr = (pow(final_value / contributed_capital, 1 / years) - 1) * 100
         else:
             cagr = 0
 
@@ -333,10 +351,11 @@ class Backtester:
         buy_hold_avg_buy_price = buy_hold_stats['avg_buy_price']
         buy_hold_buy_points = buy_hold_stats['buy_points']
         buy_hold_n_splits = buy_hold_stats['n_splits']
+        buy_hold_total_contributed = buy_hold_stats['total_contributed']
 
         # Buy & Hold CAGR
-        if years > 0 and buy_hold_final_value > 0:
-            buy_hold_cagr = (pow(buy_hold_final_value / self.initial_capital, 1 / years) - 1) * 100
+        if years > 0 and buy_hold_final_value > 0 and buy_hold_total_contributed > 0:
+            buy_hold_cagr = (pow(buy_hold_final_value / buy_hold_total_contributed, 1 / years) - 1) * 100
         else:
             buy_hold_cagr = 0
 
@@ -441,6 +460,8 @@ class Backtester:
             'buy_hold_buy_points': buy_hold_buy_points,
             'buy_hold_n_splits': buy_hold_n_splits,
             'buy_hold_stats': buy_hold_stats,  # 전체 Buy & Hold 통계 (trades 포함)
+            'buy_hold_total_contributed': buy_hold_total_contributed,
+            'total_contributed': contributed_capital,
             'max_drawdown_pct': max_drawdown,
             'portfolio_df': portfolio_df,
             'trades_df': trades_df,
@@ -467,6 +488,7 @@ class Backtester:
           * mid: 매월 중순 (10일~15일 사이)
           * last: 매월 마지막 거래일
         - 각 월에 (초기 자본 / n) 만큼 매수
+        - 필요 시 매월 첫 거래일에 추가 납입금 반영
         - 선택적으로 위험 관리 적용 (손절선, 트레일링 스톱, 목표 수익률)
         - 실제 주식 수량 기반 계산
 
@@ -543,16 +565,28 @@ class Backtester:
 
         # 포트폴리오 상태
         cash_remaining = self.initial_capital
+        total_contributed = self.initial_capital
         holdings = []  # [{'buy_price': price, 'shares': shares, 'buy_date': date, 'peak_price': price}]
         portfolio_values = []
         buy_points = []
         trades = []  # 위험 관리로 인한 거래 기록
+        last_contribution_month = None
 
         # 매일 시뮬레이션
         months_bought = 0
         for row in self.data.itertuples():
             idx = row.Index
             current_price = row.Close
+
+            current_month = idx.to_period('M') if isinstance(idx, pd.Timestamp) else None
+            if (
+                self.monthly_contribution > 0
+                and current_month is not None
+                and current_month != last_contribution_month
+            ):
+                cash_remaining += self.monthly_contribution
+                total_contributed += self.monthly_contribution
+                last_contribution_month = current_month
 
             # 매수 시점이면 주식 매수
             if idx in buy_dates_set and months_bought < actual_n_months:
@@ -587,7 +621,8 @@ class Backtester:
                 if self.use_take_profit:
                     holdings_value = sum([h['shares'] * current_price for h in holdings])
                     total_value = cash_remaining + holdings_value
-                    account_profit_pct = (total_value - self.initial_capital) / self.initial_capital
+                    base_capital = total_contributed if total_contributed > 0 else self.initial_capital
+                    account_profit_pct = (total_value - base_capital) / base_capital
 
                     # 계좌 전체 수익률이 목표치에 도달하면 모든 포지션 일괄 청산
                     if account_profit_pct >= self.take_profit_pct:
@@ -699,7 +734,8 @@ class Backtester:
             avg_buy_price = 0
 
         # 수익률
-        return_pct = (final_value - self.initial_capital) / self.initial_capital * 100
+        base_capital = total_contributed if total_contributed > 0 else self.initial_capital
+        return_pct = (final_value - base_capital) / base_capital * 100
 
         # MDD 계산
         portfolio_series = pd.Series(portfolio_values)
@@ -719,5 +755,6 @@ class Backtester:
             'buy_points': buy_points,
             'n_splits': actual_n_months,  # 실제 매수한 월 수
             'trades': trades,
-            'use_risk_mgmt': self.buy_hold_use_risk_mgmt
+            'use_risk_mgmt': self.buy_hold_use_risk_mgmt,
+            'total_contributed': total_contributed
         }
