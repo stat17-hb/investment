@@ -96,7 +96,8 @@ class Backtester:
             signal = row.Signal
             ma_20 = row.MA_20
 
-            current_month = idx.to_period('M') if isinstance(idx, pd.Timestamp) else None
+            idx_timestamp = pd.to_datetime(idx, errors='coerce')
+            current_month = idx_timestamp.to_period('M') if not pd.isna(idx_timestamp) else None
             if (
                 self.monthly_contribution > 0
                 and current_month is not None
@@ -584,7 +585,8 @@ class Backtester:
             idx = row.Index
             current_price = row.Close
 
-            current_month = idx.to_period('M') if isinstance(idx, pd.Timestamp) else None
+            idx_timestamp = pd.to_datetime(idx, errors='coerce')
+            current_month = idx_timestamp.to_period('M') if not pd.isna(idx_timestamp) else None
             if (
                 self.monthly_contribution > 0
                 and current_month is not None
