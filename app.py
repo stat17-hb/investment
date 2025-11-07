@@ -559,6 +559,15 @@ if cooldown_months > 0:
 st.sidebar.markdown("---")
 st.sidebar.subheader("Buy & Hold 설정")
 
+buy_hold_monthly_contribution = st.sidebar.number_input(
+    "월 납입금 ($)",
+    min_value=0,
+    max_value=100000,
+    value=1000,
+    step=100,
+    help="Buy & Hold 전략에서 매월 계좌에 추가로 투입할 금액입니다. 0으로 설정하면 월 납입이 발생하지 않습니다."
+)
+
 # 데이터 기간에 따른 개월수 계산
 if period.lower() == "max":
     default_months = 240  # max는 20년(240개월)으로 설정 (실제 데이터만큼만 사용됨)
@@ -650,7 +659,8 @@ if analyze_button_top or analyze_button_bottom:
                     cooldown_months=cooldown_months,
                     buy_hold_splits=buy_hold_splits,
                     buy_hold_use_risk_mgmt=buy_hold_use_risk_mgmt,
-                    buy_hold_timing=buy_hold_timing
+                    buy_hold_timing=buy_hold_timing,
+                    monthly_contribution=buy_hold_monthly_contribution
                 )
                 backtest_results = backtester.run()
 
