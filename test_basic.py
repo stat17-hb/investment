@@ -59,3 +59,47 @@ def test_backtester_tracks_monthly_contributions(synthetic_price_data):
     # 전략/Buy & Hold 모두에서 실제 매수가 발생했는지 확인
     assert results["buy_count"] > 0
     assert results["buy_hold_buy_count"] == backtester.buy_hold_splits
+
+
+def test_buy_hold_fixed_amount_exceeds_initial_capital(synthetic_price_data):
+    """Buy & Hold가 초기 자본을 초과하는 고정 납입액도 모두 투자하는지 확인"""
+
+    strategy = StandardDeviationStrategy(synthetic_price_data, lookback_period=20)
+    backtester = Backtester(
+        data=strategy.data,
+        initial_capital=5_000,
+        position_sizing_method="fixed",
+        position_size=1_000,
+        sigma_level=1,
+        monthly_contribution=0,
+        buy_hold_splits=12,
+        buy_hold_timing="first",
+    )
+
+    results = backtester.run()
+
+    assert results["buy_hold_buy_count"] == backtester.buy_hold_splits
+    assert results["buy_hold_total_invested"] == pytest.approx(12_000)
+    assert results["buy_hold_total_contributed"] == pytest.approx(12_000)
+
+
+def test_buy_hold_dynamic_respects_monthly_contributions(synthetic_price_data):
+    """동적 포지션 사이징에서도 Buy & Hold가 월 납입금을 그대로 투자하는지 확인"""
+
+    strategy = StandardDeviationStrategy(synthetic_price_data, lookback_period=20)
+    backtester = Backtester(
+        data=strategy.data,
+        initial_capital=10_000,
+        position_sizing_method="dynamic",
+        cash_allocation_pct=50,
+        sigma_level=1,
+        monthly_contribution=1_000,
+        buy_hold_splits=12,
+        buy_hold_timing="first",
+    )
+
+    results = backtester.run()
+
+    assert results["buy_hold_buy_count"] == backtester.buy_hold_splits
+    assert results["buy_hold_total_invested"] == pytest.approx(12_000)
+    assert results["buy_hold_total_contributed"] == pytest.approx(22_000)
