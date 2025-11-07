@@ -608,8 +608,18 @@ class Backtester:
                         cash_remaining += shortfall
                         total_contributed += shortfall
                 else:
-                    # 동적 방식: 현금의 n% 투입
-                    buy_amount = cash_remaining * (self.cash_allocation_pct / 100)
+                    if self.monthly_contribution > 0:
+                        # 동적 방식이라도 월 납입금은 고정 금액으로 투입한다.
+                        buy_amount = self.monthly_contribution
+                        if cash_remaining < buy_amount:
+                            shortfall = buy_amount - cash_remaining
+                            cash_remaining += shortfall
+                            total_contributed += shortfall
+                    elif self.cash_allocation_pct is not None and self.cash_allocation_pct > 0:
+                        # 월 납입금이 없다면 기존 현금 비율 방식 유지
+                        buy_amount = cash_remaining * (self.cash_allocation_pct / 100)
+                    else:
+                        buy_amount = None
 
                 if buy_amount is not None and buy_amount > 0 and cash_remaining >= buy_amount:
                     shares = buy_amount / current_price
