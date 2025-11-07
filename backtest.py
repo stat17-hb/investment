@@ -96,7 +96,8 @@ class Backtester:
             signal = row.Signal
             ma_20 = row.MA_20
 
-            current_month = idx.to_period('M') if isinstance(idx, pd.Timestamp) else None
+            idx_timestamp = pd.to_datetime(idx, errors='coerce')
+            current_month = idx_timestamp.to_period('M') if not pd.isna(idx_timestamp) else None
             if (
                 self.monthly_contribution > 0
                 and current_month is not None
@@ -487,7 +488,7 @@ class Backtester:
           * first: 매월 첫 거래일
           * mid: 매월 중순 (10일~15일 사이)
           * last: 매월 마지막 거래일
-        - 각 월에 (초기 자본 / n) 만큼 매수
+        - 고정 금액이 설정되어 있다면 그 금액으로, 아니면 초기 자본을 n등분하여 매수
         - 필요 시 매월 첫 거래일에 추가 납입금 반영
         - 선택적으로 위험 관리 적용 (손절선, 트레일링 스톱, 목표 수익률)
         - 실제 주식 수량 기반 계산
@@ -553,10 +554,16 @@ class Backtester:
         # 실제로 매수할 월 수 (데이터가 부족할 수 있음)
         actual_n_months = len(first_trading_days)
 
-        # 포지션 사이징 방식에 따라 초기 분할 금액 계산
+        # 포지션 사이징 방식에 따라 월별 매수 금액 결정
         if self.position_sizing_method == "fixed":
-            # 고정 금액 방식: 초기 자본을 n등분
-            capital_per_month = self.initial_capital / actual_n_months
+            if self.position_size is not None:
+                # 고정 금액이 설정된 경우 해당 금액을 그대로 사용
+                capital_per_month = self.position_size
+            elif actual_n_months > 0:
+                # 설정된 고정 금액이 없다면 초기 자본을 균등 분할
+                capital_per_month = self.initial_capital / actual_n_months
+            else:
+                capital_per_month = 0
         else:
             # 동적 방식: 매번 현금의 n%씩 투입 (초기값은 참고용)
             capital_per_month = None
@@ -578,7 +585,8 @@ class Backtester:
             idx = row.Index
             current_price = row.Close
 
-            current_month = idx.to_period('M') if isinstance(idx, pd.Timestamp) else None
+            idx_timestamp = pd.to_datetime(idx, errors='coerce')
+            current_month = idx_timestamp.to_period('M') if not pd.isna(idx_timestamp) else None
             if (
                 self.monthly_contribution > 0
                 and current_month is not None
