@@ -601,11 +601,17 @@ class Backtester:
                 # 포지션 사이즈 계산
                 if self.position_sizing_method == "fixed":
                     buy_amount = capital_per_month
+                    if buy_amount is not None and cash_remaining < buy_amount:
+                        # Buy & Hold는 고정 납입액을 계속 투자해야 하므로
+                        # 현금이 부족한 경우 부족분만큼 추가 납입으로 충당한다.
+                        shortfall = buy_amount - cash_remaining
+                        cash_remaining += shortfall
+                        total_contributed += shortfall
                 else:
                     # 동적 방식: 현금의 n% 투입
                     buy_amount = cash_remaining * (self.cash_allocation_pct / 100)
 
-                if cash_remaining >= buy_amount:
+                if buy_amount is not None and buy_amount > 0 and cash_remaining >= buy_amount:
                     shares = buy_amount / current_price
                     holdings.append({
                         'buy_price': current_price,
